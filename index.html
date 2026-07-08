@@ -407,6 +407,91 @@ const vnorm=a=>{const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2
 
 const LIGHT = vnorm([0.45, 0.85, 0.32]);
 
+/* ---------- Component Library / Assembly / Renderer / BOM ---------- */
+const PROFILE = {
+  box:{type:'polygon', points:[[ -0.5,-0.5 ],[ 0.5,-0.5 ],[ 0.5,0.5 ],[ -0.5,0.5 ]]},
+  tube:{type:'ring'},
+  trapezoid:{type:'polygon', points:[]}
+};
+
+const COMPONENT_DEFINITIONS = [
+  {id:'deck',   category:'wood',      profile:PROFILE.box,  material:'wood',        defaultColor:MAT.deck.color,   defaultLayer:'base',  bandAllowed:true,  contact:{kind:'support'}, properties:{label:MAT.deck.label}},
+  {id:'bearer', category:'wood',      profile:PROFILE.box,  material:'wood',        defaultColor:MAT.bearer.color, defaultLayer:'base',  bandAllowed:true,  contact:{kind:'support'}, properties:{label:MAT.bearer.label}},
+  {id:'skidT',  category:'wood',      profile:PROFILE.box,  material:'wood',        defaultColor:MAT.skidT.color,  defaultLayer:'base',  bandAllowed:true,  contact:{kind:'support'}, properties:{label:MAT.skidT.label}},
+  {id:'skidB',  category:'wood',      profile:PROFILE.box,  material:'wood',        defaultColor:MAT.skidB.color,  defaultLayer:'base',  bandAllowed:true,  contact:{kind:'support'}, properties:{label:MAT.skidB.label}},
+  {id:'lidB',   category:'wood',      profile:PROFILE.box,  material:'wood',        defaultColor:MAT.lidB.color,   defaultLayer:'lid',   bandAllowed:true,  contact:{kind:'cover'},   properties:{label:MAT.lidB.label}},
+  {id:'lidBr',  category:'wood',      profile:PROFILE.box,  material:'wood',        defaultColor:MAT.lidBr.color,  defaultLayer:'lid',   bandAllowed:true,  contact:{kind:'cover'},   properties:{label:MAT.lidBr.label}},
+  {id:'steel',  category:'product',   profile:PROFILE.tube, material:'aluminum',    defaultColor:MAT.steel.color,  defaultLayer:'prod',  bandAllowed:false, contact:{kind:'product'}, properties:{label:MAT.steel.label}},
+  {id:'wrap',   category:'packaging', profile:PROFILE.box,  material:'kraft-paper', defaultColor:MAT.wrap.color,   defaultLayer:'wrap',  bandAllowed:false, contact:{kind:'cover'},   properties:{label:MAT.wrap.label}},
+  {id:'bandL',  category:'band',      profile:PROFILE.box,  material:'steel-band',  defaultColor:MAT.bandL.color,  defaultLayer:'bandL', bandAllowed:false, contact:{kind:'strap'},   properties:{label:MAT.bandL.label, width:30}},
+  {id:'bandC',  category:'band',      profile:PROFILE.box,  material:'steel-band',  defaultColor:MAT.bandC.color,  defaultLayer:'bandC', bandAllowed:false, contact:{kind:'strap'},   properties:{label:MAT.bandC.label, width:30}},
+  {id:'nail',   category:'hardware',  profile:null,         material:'steel',       defaultColor:MAT.nail.color,   defaultLayer:'base',  bandAllowed:false, contact:{kind:'fastener'}, properties:{label:MAT.nail.label}}
+];
+
+class ComponentLibrary{
+  constructor(definitions){
+    this.components={};
+    for(const def of definitions) this.components[def.id]=Object.assign({properties:{}}, def);
+  }
+  get(id){ return this.components[id] || {id, category:'custom', profile:PROFILE.box, material:id, defaultColor:'#999', defaultLayer:'base', bandAllowed:true, contact:{kind:'custom'}, properties:{label:id}}; }
+}
+
+class SceneRenderer{
+  reset(){ FACES=[]; BOUNDS=null; SOLIDS=[]; }
+  addFace(key, grp, color, pts, ref, opt={}, edges){ return addFacePrimitive(key, grp, color, pts, ref, opt, edges); }
+  addBox(key, grp, color, cx, cy, cz, sx, sy, sz, opt={}){ return addBoxPrimitive(key, grp, color, cx, cy, cz, sx, sy, sz, opt); }
+  addExtrusion(shape){
+    // 現行の直方体は「矩形ProfileをY方向に押し出した形状」として扱う。
+    // 任意Profileの描画は将来ここへ追加し、Assembly側の配置APIは維持する。
+    if(shape.profile===PROFILE.box && shape.extrude.axis==='y')
+      return this.addBox(shape.key, shape.group, shape.color, shape.position.x, shape.position.y, shape.position.z, shape.size.x, shape.size.y, shape.size.z, shape.options);
+    return this.addFace(shape.key, shape.group, shape.color, shape.points, shape.ref, shape.options, shape.edges);
+  }
+  addTube(key, grp, color, C, axis, Ro, Ri, len, seg, opt={}){ return addTubePrimitive(key, grp, color, C, axis, Ro, Ri, len, seg, opt); }
+  addRibbon(key, grp, color, pts2, mapper, widthVec, w, opt={}){ return addRibbonPrimitive(key, grp, color, pts2, mapper, widthVec, w, opt); }
+}
+
+class Assembly{
+  constructor(library, renderer){ this.library=library; this.renderer=renderer; this.instances=[]; }
+  component(key){ return this.library.get(key); }
+  placeExtrusion(key, grp, color, position, size, opt={}){
+    const component=this.component(key);
+    const shape={
+      key, group:grp, color, profile:component.profile||PROFILE.box,
+      position:{x:position.x,y:position.y,z:position.z},
+      rotation:{x:0,y:0,z:0}, size:{x:size.x,y:size.y,z:size.z},
+      extrude:{axis:'y', length:size.y}, options:opt
+    };
+    this.instances.push({componentId:key, type:'extrusion', profile:shape.profile, position:shape.position, rotation:shape.rotation, size:shape.size, extrude:shape.extrude});
+    return this.renderer.addExtrusion(shape);
+  }
+  placeBox(key, grp, color, cx, cy, cz, sx, sy, sz, opt={}){
+    return this.placeExtrusion(key, grp, color, {x:cx,y:cy,z:cz}, {x:sx,y:sy,z:sz}, opt);
+  }
+  placeTube(key, grp, color, C, axis, Ro, Ri, len, seg, opt={}){
+    this.instances.push({componentId:key, type:'tube', profile:PROFILE.tube, position:{x:C[0],y:C[1],z:C[2]}, rotation:{axis}, size:{outerRadius:Ro,innerRadius:Ri,length:len}});
+    return this.renderer.addTube(key, grp, color, C, axis, Ro, Ri, len, seg, opt);
+  }
+  placeFace(key, grp, color, pts, ref, opt={}, edges){ return this.renderer.addFace(key, grp, color, pts, ref, opt, edges); }
+  placeRibbon(key, grp, color, pts2, mapper, widthVec, w, opt={}){ return this.renderer.addRibbon(key, grp, color, pts2, mapper, widthVec, w, opt); }
+}
+
+class BomBuilder{
+  reset(){ BOM=[]; }
+  add(key,label,spec,qty,unit,extra){
+    const component=COMPONENT_LIBRARY.get(key);
+    const r=BOM.find(r=>r.key===key && r.spec===spec);
+    if(r){ r.qty+=qty; if(extra){for(const k in extra) r[k]=(r[k]||0)+extra[k];} }
+    else BOM.push(Object.assign({key,label:label||component.material,spec,qty,unit,componentId:component.id}, extra||{}));
+  }
+}
+
+class BandRouting{
+  addLoop(key, plane, at, groups, bw){ return addBandLoopPrimitive(key, plane, at, groups, bw); }
+}
+
+const COMPONENT_LIBRARY = new ComponentLibrary(COMPONENT_DEFINITIONS);
+
 /* ---------- シーン(面リスト)・資材リスト ---------- */
 let FACES=[], BOM=[], BOUNDS=null, SUMMARY=[], HASCOILBAND=false, HASLID=true;
 /* バンド経路計算用に、立体（箱・円筒）の一覧も保持する */
@@ -420,7 +505,7 @@ function shadeHex(hex, f){
 /* 面を登録: pts(反時計回り推奨), ref=外向きの目安ベクトル, opt={two,tone}
    大きな四角形は格子分割して登録する（ペインターアルゴリズムの前後判定を安定させる）。
    edges は分割セルの外形線マスク [p0p1,p1p2,p2p3,p3p0]（内部の継ぎ目は輪郭を描かない） */
-function addFace(key, grp, color, pts, ref, opt={}, edges){
+function addFacePrimitive(key, grp, color, pts, ref, opt={}, edges){
   if(pts.length===4 && !opt.nosub){
     const len=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]);
     const lim=opt.sub||SUBDIV;
@@ -432,7 +517,7 @@ function addFace(key, grp, color, pts, ref, opt={}, edges){
       const em=edges||[1,1,1,1];
       const o2=Object.assign({}, opt, {nosub:true});
       for(let i=0;i<nu;i++)for(let j=0;j<nv;j++){
-        addFace(key,grp,color,
+        addFacePrimitive(key,grp,color,
           [P(i/nu,j/nv), P((i+1)/nu,j/nv), P((i+1)/nu,(j+1)/nv), P(i/nu,(j+1)/nv)],
           ref, o2,
           [j===0&&em[0], i===nu-1&&em[1], j===nv-1&&em[2], i===0&&em[3]]);
@@ -469,20 +554,20 @@ function addFace(key, grp, color, pts, ref, opt={}, edges){
 }
 
 /* 直方体 (中心と寸法) */
-function addBox(key,grp,color, cx,cy,cz, sx,sy,sz, opt={}){
+function addBoxPrimitive(key,grp,color, cx,cy,cz, sx,sy,sz, opt={}){
   SOLIDS.push({t:'box', g:grp, cx,cy,cz, sx,sy,sz});
   const x0=cx-sx/2,x1=cx+sx/2, y0=cy-sy/2,y1=cy+sy/2, z0=cz-sz/2,z1=cz+sz/2;
   const fo={tone:opt.tone||0, oc:opt.oc};
-  addFace(key,grp,color, [[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]], [1,0,0], fo);
-  addFace(key,grp,color, [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]], [-1,0,0],fo);
-  addFace(key,grp,color, [[x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0]], [0,1,0], fo);
-  addFace(key,grp,color, [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]], [0,-1,0],fo);
-  addFace(key,grp,color, [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], [0,0,1], fo);
-  addFace(key,grp,color, [[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],[x1,y0,z0]], [0,0,-1],fo);
+  addFacePrimitive(key,grp,color, [[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]], [1,0,0], fo);
+  addFacePrimitive(key,grp,color, [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]], [-1,0,0],fo);
+  addFacePrimitive(key,grp,color, [[x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0]], [0,1,0], fo);
+  addFacePrimitive(key,grp,color, [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]], [0,-1,0],fo);
+  addFacePrimitive(key,grp,color, [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], [0,0,1], fo);
+  addFacePrimitive(key,grp,color, [[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],[x1,y0,z0]], [0,0,-1],fo);
 }
 
 /* 円筒/リング。axis:'x'|'y'。Ri>0で中空。caps=[start,end] */
-function addTube(key,grp,color, C, axis, Ro, Ri, len, seg, opt={}){
+function addTubePrimitive(key,grp,color, C, axis, Ro, Ri, len, seg, opt={}){
   const caps = opt.caps||[true,true];
   const t0=-len/2, t1=len/2;
   const pt=(th,R,t)=>{
@@ -501,10 +586,10 @@ function addTube(key,grp,color, C, axis, Ro, Ri, len, seg, opt={}){
     const rm=rad((a+b2)/2);
     // 外周
     if(!opt.noOuter)
-      addFace(key,grp,color,[pt(a,Ro,t0),pt(b2,Ro,t0),pt(b2,Ro,t1),pt(a,Ro,t1)], rm, {tone, oc:opt.ocOuter, sub:opt.sub, dbias:opt.dbias});
+      addFacePrimitive(key,grp,color,[pt(a,Ro,t0),pt(b2,Ro,t0),pt(b2,Ro,t1),pt(a,Ro,t1)], rm, {tone, oc:opt.ocOuter, sub:opt.sub, dbias:opt.dbias});
     // 内周（中空のみ / 穴から見える面）
     if(Ri>0.5 && !opt.noInner)
-      addFace(key,grp,color,[pt(a,Ri,t0),pt(b2,Ri,t0),pt(b2,Ri,t1),pt(a,Ri,t1)], [-rm[0],-rm[1],-rm[2]],
+      addFacePrimitive(key,grp,color,[pt(a,Ri,t0),pt(b2,Ri,t0),pt(b2,Ri,t1),pt(a,Ri,t1)], [-rm[0],-rm[1],-rm[2]],
         {tone:tone-0.06, oc:opt.ocInner, sub:opt.sub, dbias:(opt.dbiasIn!==undefined?opt.dbiasIn:opt.dbias)});
     // 端面（円筒面より内側にあるため、capBiasで奥扱いにして先に描ける。
     // capBias は数値または [開始側, 終端側]: 露出する端面と内部に隠れる端面で描画順を分ける）
@@ -514,19 +599,19 @@ function addTube(key,grp,color, C, axis, Ro, Ri, len, seg, opt={}){
       const P = Ri>0.5
         ? [pt(a,Ro,t1),pt(b2,Ro,t1),pt(b2,Ri,t1),pt(a,Ri,t1)]
         : [pt(a,Ro,t1),pt(b2,Ro,t1),[C[0]+(axis==='y'?0:t1),C[1]+(axis==='y'?t1:0),C[2]]];
-      addFace(key,grp,color,P, A, {tone:capTone, dbias:cbA[1], sub:opt.sub});
+      addFacePrimitive(key,grp,color,P, A, {tone:capTone, dbias:cbA[1], sub:opt.sub});
     }
     if(caps[0]){
       const P = Ri>0.5
         ? [pt(a,Ro,t0),pt(a,Ri,t0),pt(b2,Ri,t0),pt(b2,Ro,t0)]
         : [pt(a,Ro,t0),[C[0]+(axis==='y'?0:t0),C[1]+(axis==='y'?t0:0),C[2]],pt(b2,Ro,t0)];
-      addFace(key,grp,color,P, [-A[0],-A[1],-A[2]], {tone:capTone, dbias:cbA[0], sub:opt.sub});
+      addFacePrimitive(key,grp,color,P, [-A[0],-A[1],-A[2]], {tone:capTone, dbias:cbA[0], sub:opt.sub});
     }
   }
 }
 
 /* 帯（バンド）: 平面内の閉じた折れ線 → 幅 w のリボン。mapper(a,b)->[x,y,z] */
-function addRibbon(key,grp,color, pts2, mapper, widthVec, w, opt={}){
+function addRibbonPrimitive(key,grp,color, pts2, mapper, widthVec, w, opt={}){
   const seg=[];
   for(let i=0;i<pts2.length;i++){
     const a=pts2[i], b=pts2[(i+1)%pts2.length];
@@ -542,7 +627,7 @@ function addRibbon(key,grp,color, pts2, mapper, widthVec, w, opt={}){
     const a=seg[i], b=seg[(i+1)%seg.length];
     L+=Math.hypot(b[0]-a[0],b[1]-a[1]);
     const A=mapper(a[0],a[1]), B=mapper(b[0],b[1]);
-    addFace(key,grp,color,
+    addFacePrimitive(key,grp,color,
       [[A[0]-half[0],A[1]-half[1],A[2]-half[2]],
        [B[0]-half[0],B[1]-half[1],B[2]-half[2]],
        [B[0]+half[0],B[1]+half[1],B[2]+half[2]],
@@ -609,29 +694,36 @@ function inflate(h, d){
   return out;
 }
 /* 断面内の最外部材（角板・けた・円筒）に密着する张力バンドを1本掛ける */
-function addBandLoop(key, plane, at, groups, bw){
+function addBandLoopPrimitive(key, plane, at, groups, bw){
   const pts=bandSupports(plane, at, groups);
   if(pts.length<3) return 0;
   const loop=inflate(hull2(pts), 5);
   const mapper = plane==='x' ? (u,v)=>[at,v,u] : (u,v)=>[u,v,at];
   const wv = plane==='x' ? [1,0,0] : [0,0,1];
-  return addRibbon(key, MAT[key].g, MAT[key].color, loop, mapper, wv, bw||30);
-}
-
-/* ---------- BOM ---------- */
-function bomAdd(key,label,spec,qty,unit,extra){
-  const r=BOM.find(r=>r.key===key && r.spec===spec);
-  if(r){ r.qty+=qty; if(extra){for(const k in extra) r[k]=(r[k]||0)+extra[k];} }
-  else BOM.push(Object.assign({key,label,spec,qty,unit}, extra||{}));
+  return addRibbonPrimitive(key, MAT[key].g, MAT[key].color, loop, mapper, wv, bw||30);
 }
 
 /* =========================================================================
-   シーン構築（形状と資材リストを同時生成 = 単一情報源）
+   シーン構築（Component Library / Assembly / Band Routing / BOM / Renderer に分離）
    ========================================================================= */
 const PAL={deckT:40, deckW:115, bearer:90, skid:100, lidT:40, lidW:115, lidXT:25, lidXBr:60};
 
 function buildScene(){
-  FACES=[]; BOM=[]; BOUNDS=null; SUMMARY=[]; HASCOILBAND=false; SOLIDS=[]; S._coilCull=null; S._cullBox=null;
+  const renderer=new SceneRenderer();
+  const bom=new BomBuilder();
+  const assembly=new Assembly(COMPONENT_LIBRARY, renderer);
+  const bandRouting=new BandRouting();
+  renderer.reset(); bom.reset(); SUMMARY=[]; HASCOILBAND=false; S._coilCull=null; S._cullBox=null;
+  buildAssembly({assembly, bandRouting, bom});
+}
+
+function buildAssembly(ctx){
+  const {assembly, bandRouting, bom}=ctx;
+  const addFace=(...args)=>assembly.placeFace(...args);
+  const addBox=(...args)=>assembly.placeBox(...args);
+  const addTube=(...args)=>assembly.placeTube(...args);
+  const addBandLoop=(...args)=>bandRouting.addLoop(...args);
+  const bomAdd=(...args)=>bom.add(...args);
   const m=S.base.margin, gap=S.base.gap, pallet=S.base.kind==='pallet';
   // 仕様: 上蓋はパレットのみ。ただし横向きコイルは上蓋不要（バンドで下台に固定）
   HASLID = pallet && !(S.type==='coil' && S.coil.orient==='wall');
