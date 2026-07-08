@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>アルミ材梱包 3Dビューア — コイル・板</title>
+<style>
+  :root{
+    --ink:#3b3226; --ink2:#6d6353; --line:#e5dccd; --panel:#fffdf8;
+    --accent:#b25c1f; --accent-soft:#f7e8da; --bg:#f3ebdd;
+    --chip:#f6f0e4;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,system-ui,sans-serif;
+    color:var(--ink); background:var(--bg); font-size:13.5px; line-height:1.55;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  header{
+    display:flex; align-items:baseline; gap:14px; padding:10px 18px;
+    background:var(--panel); border-bottom:1px solid var(--line); flex:none;
+  }
+  header h1{font-size:16px; letter-spacing:.02em;}
+  header .sub{font-size:12px; color:var(--ink2);}
+  main{flex:1; display:flex; min-height:0;}
+
+  /* ---- 左パネル ---- */
+  #panel{
+    width:352px; flex:none; overflow-y:auto; background:var(--panel);
+    border-right:1px solid var(--line); padding:12px 14px 40px;
+  }
+  section.grp{border:1px solid var(--line); border-radius:10px; padding:10px 12px 12px; margin-bottom:12px; background:#fff;}
+  section.grp>h2{
+    font-size:12.5px; color:var(--accent); letter-spacing:.06em; margin-bottom:8px;
+    display:flex; align-items:center; gap:6px;
+  }
+  section.grp>h2 .no{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; border-radius:50%; background:var(--accent); color:#fff;
+    font-size:11px; flex:none;
+  }
+  .row{margin:7px 0;}
+  .rowlab{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px;}
+  .rowlab .nm{font-size:12.5px; color:var(--ink);}
+  .rowlab .val{font-size:12.5px; color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums;}
+  input[type=range]{width:100%; accent-color:var(--accent); height:22px;}
+  .seg{display:flex; gap:0; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .seg label{
+    flex:1; text-align:center; padding:6px 4px; cursor:pointer; background:#fff;
+    font-size:12.5px; border-left:1px solid var(--line); user-select:none;
+  }
+  .seg label:first-child{border-left:none;}
+  .seg input{display:none;}
+  .seg input:checked+span{font-weight:700; color:var(--accent);}
+  .seg label:has(input:checked){background:var(--accent-soft);}
+  .seg label.off{opacity:.4; cursor:not-allowed;}
+  .hint{font-size:11.5px; color:var(--ink2); margin-top:3px;}
+  .lock{font-size:11.5px; color:#8b6a3f; background:#faf3e3; border:1px dashed #e4d3ae; border-radius:6px; padding:4px 8px; margin-top:6px;}
+  .subnote{font-size:11px; color:var(--ink2);}
+
+  /* 表示状態 */
+  .presets{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px;}
+  .presets button{
+    padding:7px 4px; border:1px solid var(--line); border-radius:8px; background:#fff;
+    font-size:12.5px; cursor:pointer; color:var(--ink);
+  }
+  .presets button:hover:not(:disabled){border-color:var(--accent);}
+  .presets button:disabled{opacity:.35; cursor:not-allowed;}
+  .presets button[aria-pressed=true]{background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700;}
+  .layers{display:flex; flex-wrap:wrap; gap:5px;}
+  .layers label{
+    display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:999px;
+    border:1px solid var(--line); background:#fff; cursor:pointer; font-size:12px; user-select:none;
+  }
+  .layers label .dot{width:9px; height:9px; border-radius:50%; flex:none;}
+  .layers input{display:none;}
+  .layers label:has(input:checked){background:var(--chip); border-color:#c9b285;}
+  .layers label:has(input:not(:checked)){opacity:.45;}
+  .layers label.off{opacity:.3; cursor:not-allowed;}
+
+  /* BOM */
+  table.bom{width:100%; border-collapse:collapse; font-size:12px;}
+  table.bom th{
+    text-align:left; color:var(--ink2); font-weight:600; font-size:11px;
+    border-bottom:1px solid var(--line); padding:3px 4px;
+  }
+  table.bom td{border-bottom:1px solid #f0e9db; padding:4px 4px; vertical-align:top;}
+  table.bom td.q{text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums;}
+  table.bom tr.hoverable{cursor:pointer;}
+  table.bom tr.hoverable:hover{background:var(--accent-soft);}
+  .mchip{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:baseline; border:1px solid rgba(0,0,0,.15);}
+  .totals{font-size:12px; color:var(--ink); background:var(--chip); border-radius:8px; padding:7px 10px; margin-top:8px; line-height:1.7;}
+  .totals b{color:var(--accent);}
+
+  details.psy{margin-top:4px; font-size:12px; color:var(--ink2);}
+  details.psy summary{cursor:pointer; color:var(--accent); font-size:12.5px; margin-bottom:6px;}
+  details.psy li{margin:4px 0 4px 18px;}
+  details.psy b{color:var(--ink);}
+
+  /* 設定プリセット */
+  .presetSaveRow{display:flex; gap:6px; margin-bottom:8px;}
+  .presetSaveRow input[type=text]{
+    flex:1; min-width:0; border:1px solid var(--line); border-radius:7px;
+    padding:6px 8px; font-size:12.5px; font-family:inherit; color:var(--ink); background:#fff;
+  }
+  .presetSaveRow input[type=text]:focus{outline:2px solid var(--accent-soft); border-color:var(--accent);}
+  .presetSaveRow button{
+    flex:none; padding:6px 14px; border:1px solid var(--accent); border-radius:7px;
+    background:var(--accent); color:#fff; font-size:12.5px; font-weight:700; cursor:pointer;
+  }
+  .presetSaveRow button:hover{background:#9a4c17;}
+  .presetEmpty{font-size:11.5px; color:var(--ink2); padding:6px 2px;}
+  .presetRow{
+    display:flex; align-items:center; gap:6px; padding:6px 4px; border-bottom:1px solid #f0e9db;
+  }
+  .presetRow:last-child{border-bottom:none;}
+  .presetRow .pname{flex:1; min-width:0; font-size:12.5px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .presetRow .pdate{flex:none; font-size:10.5px; color:var(--ink2); font-variant-numeric:tabular-nums;}
+  .presetRow button{
+    flex:none; border:1px solid var(--line); border-radius:6px; background:#fff;
+    font-size:11.5px; padding:3px 8px; cursor:pointer; color:var(--ink);
+  }
+  .presetRow .papply:hover{border-color:var(--accent); color:var(--accent);}
+  .presetRow .pdel:hover{border-color:#b23c3c; color:#b23c3c;}
+
+  /* ---- 3D ステージ ---- */
+  #stage{flex:1; position:relative; min-width:0; background:linear-gradient(180deg,#f8f1e5 0%,#efe2cd 100%);}
+  #cv{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none;}
+  #cv.dragging{cursor:grabbing;}
+  #chips{position:absolute; top:10px; left:12px; right:130px; display:flex; flex-wrap:wrap; gap:5px; pointer-events:none;}
+  #chips span{
+    background:rgba(255,253,248,.92); border:1px solid var(--line); border-radius:999px;
+    padding:3px 10px; font-size:11.5px; color:var(--ink); white-space:nowrap;
+  }
+  #views{position:absolute; top:10px; right:12px; display:flex; flex-direction:column; gap:5px;}
+  #views button{
+    width:104px; padding:5px 6px; font-size:12px; border:1px solid var(--line); border-radius:7px;
+    background:rgba(255,253,248,.94); cursor:pointer; color:var(--ink);
+  }
+  #views button:hover{border-color:var(--accent); color:var(--accent);}
+  #views button.primary{background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700;}
+  #views button.primary:hover{background:#9a4c17; color:#fff;}
+  #views .vsep{border-top:1px solid var(--line); margin:2px 0;}
+  #opHint{
+    position:absolute; bottom:10px; right:12px; font-size:11px; color:var(--ink2);
+    background:rgba(255,253,248,.85); border-radius:6px; padding:3px 9px; pointer-events:none;
+  }
+  #bandNote{
+    position:absolute; bottom:10px; left:12px; font-size:11px; color:#8b6a3f;
+    background:rgba(250,243,227,.95); border:1px dashed #e4d3ae; border-radius:6px; padding:3px 9px;
+    pointer-events:none; display:none;
+  }
+  @media (max-width:880px){
+    body{overflow:auto;}
+    main{flex-direction:column-reverse;}
+    #panel{width:100%; border-right:none; border-top:1px solid var(--line); max-height:none; overflow:visible;}
+    #stage{height:58vh; flex:none;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>アルミ材梱包 3Dビューア</h1>
+  <span class="sub">アルミコイル / アルミ板 の出荷梱包を組んだり開いたりしながら資材を数えられます（単位: mm）</span>
+</header>
+<main>
+  <!-- ================= 操作パネル ================= -->
+  <aside id="panel">
+
+    <section class="grp">
+      <h2><span class="no">1</span>製品</h2>
+      <div class="seg" id="segType">
+        <label><input type="radio" name="ptype" value="coil" checked><span>コイル</span></label>
+        <label><input type="radio" name="ptype" value="plate"><span>板（アルミ）</span></label>
+      </div>
+
+      <div id="coilInputs">
+        <div class="row">
+          <div class="rowlab"><span class="nm">外径 OD</span><span class="val" id="v_od"></span></div>
+          <input type="range" id="in_od" min="700" max="2100" step="50" value="1200">
+        </div>
+        <div class="row">
+          <div class="rowlab"><span class="nm">内径 ID</span></div>
+          <div class="seg">
+            <label><input type="radio" name="cid" value="508"><span>φ508</span></label>
+            <label><input type="radio" name="cid" value="610" checked><span>φ610</span></label>
+          </div>
+        </div>
+        <div class="row">
+          <div class="rowlab"><span class="nm">条数（スリット数）</span><span class="val" id="v_cn"></span></div>
+          <input type="range" id="in_cn" min="1" max="6" step="1" value="3">
+        </div>
+        <div class="row">
+          <div class="rowlab"><span class="nm">条幅（1条あたり）</span><span class="val" id="v_cw"></span></div>
+          <input type="range" id="in_cw" min="60" max="600" step="10" value="180">
+          <div class="hint" id="v_totw"></div>
+        </div>
+      </div>
+
+      <div id="plateInputs" style="display:none">
+        <div class="row">
+          <div class="rowlab"><span class="nm">長さ L</span><span class="val" id="v_pl"></span></div>
+          <input type="range" id="in_pl" min="1000" max="4000" step="100" value="2400">
+        </div>
+        <div class="row">
+          <div class="rowlab"><span class="nm">幅 W</span><span class="val" id="v_pw"></span></div>
+          <input type="range" id="in_pw" min="500" max="1600" step="50" value="1100">
+        </div>
+        <div class="row">
+          <div class="rowlab"><span class="nm">板厚 t</span><span class="val" id="v_pt"></span></div>
+          <input type="range" id="in_pt" min="3" max="25" step="1" value="6">
+        </div>
+        <div class="row">
+          <div class="rowlab"><span class="nm">枚数</span><span class="val" id="v_pn"></span></div>
+          <input type="range" id="in_pn" min="1" max="30" step="1" value="12">
+        </div>
+      </div>
+    </section>
+
+    <section class="grp">
+      <h2><span class="no">2</span>姿勢と包み方</h2>
+      <div id="coilPack">
+        <div class="row">
+          <div class="rowlab"><span class="nm">コイルの姿勢</span></div>
+          <div class="seg">
+            <label><input type="radio" name="orient" value="wall" checked><span>横向き<br><span class="subnote">eye to wall</span></span></label>
+            <label><input type="radio" name="orient" value="sky"><span>上向き<br><span class="subnote">eye to sky</span></span></label>
+          </div>
+          <div class="hint" id="wrapHint"></div>
+        </div>
+        <div class="row">
+          <div class="rowlab"><span class="nm">包装単位</span></div>
+          <div class="seg">
+            <label><input type="radio" name="cunit" value="batch" checked><span>全条一括</span></label>
+            <label><input type="radio" name="cunit" value="each"><span>条ごと</span></label>
+          </div>
+          <div class="hint" id="cunitHint"></div>
+        </div>
+      </div>
+      <div id="platePack" style="display:none">
+        <div class="row">
+          <div class="rowlab"><span class="nm">包装単位</span></div>
+          <div class="seg">
+            <label><input type="radio" name="punit" value="batch" checked><span>全数一括</span></label>
+            <label><input type="radio" name="punit" value="split"><span>小分け</span></label>
+          </div>
+        </div>
+        <div class="row" id="rowPk">
+          <div class="rowlab"><span class="nm">小分け枚数（1束あたり）</span><span class="val" id="v_pk"></span></div>
+          <input type="range" id="in_pk" min="1" max="30" step="1" value="4">
+          <div class="hint" id="v_bundles"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grp">
+      <h2><span class="no">3</span>下台と上蓋</h2>
+      <div class="row">
+        <div class="rowlab"><span class="nm">下台の種類</span></div>
+        <div class="seg" id="segBase">
+          <label id="labPallet"><input type="radio" name="bkind" value="pallet" checked><span>パレット<br><span class="subnote">平面で受ける</span></span></label>
+          <label id="labSkid"><input type="radio" name="bkind" value="skid"><span>スキッド<br><span class="subnote">角材を井桁積み</span></span></label>
+        </div>
+        <div class="lock" id="baseLock" style="display:none"></div>
+      </div>
+      <div class="row" id="rowGap">
+        <div class="rowlab"><span class="nm">パレット板の隙間</span><span class="val" id="v_gap"></span></div>
+        <input type="range" id="in_gap" min="0" max="120" step="5" value="30">
+        <div class="hint">隙間を広げると使用本数が減ります（資材リストに反映）</div>
+      </div>
+      <div class="row">
+        <div class="rowlab"><span class="nm">下台・上蓋の寸法余裕</span><span class="val" id="v_mg"></span></div>
+        <input type="range" id="in_mg" min="0" max="30" step="5" value="20">
+        <div class="hint" id="mgHint"></div>
+      </div>
+      <div class="row" id="rowLid">
+        <div class="rowlab"><span class="nm">上蓋の組み方</span></div>
+        <div class="seg">
+          <label><input type="radio" name="lmode" value="sym" checked><span>上下対称<br><span class="subnote">下台の鏡映し</span></span></label>
+          <label><input type="radio" name="lmode" value="cross"><span>直交<br><span class="subnote">接触面の板が90°</span></span></label>
+        </div>
+      </div>
+      <div class="lock" id="lidLock" style="display:none">スキッドのため上蓋はありません（仕様）。</div>
+    </section>
+
+    <section class="grp">
+      <h2><span class="no">4</span>梱包の状態（開ける・組む）</h2>
+      <div class="presets" id="presets">
+        <button data-p="full">完全梱包</button>
+        <button data-p="lidoff">上蓋だけ外す</button>
+        <button data-p="open">開梱（製品を載せた状態）</button>
+        <button data-p="baseonly">下台のみ</button>
+      </div>
+      <div class="layers" id="layers"></div>
+      <div class="row" style="margin-top:9px">
+        <div class="rowlab"><span class="nm">分解表示（構成の確認）</span><span class="val" id="v_ex"></span></div>
+        <input type="range" id="in_ex" min="0" max="100" step="1" value="0">
+      </div>
+    </section>
+
+    <section class="grp">
+      <h2><span class="no">5</span>資材リスト（自動集計）</h2>
+      <div class="hint" style="margin-bottom:6px">現在の梱包仕様で使う資材・副資材です。行にマウスを乗せると3D上で該当資材が強調されます。表示ON/OFFに関わらず仕様どおり集計します。</div>
+      <table class="bom">
+        <thead><tr><th>資材</th><th>仕様</th><th style="text-align:right">数量</th></tr></thead>
+        <tbody id="bomBody"></tbody>
+      </table>
+      <div class="totals" id="totals"></div>
+    </section>
+
+    <section class="grp">
+      <h2><span class="no">6</span>設定プリセット（このブラウザに保存）</h2>
+      <div class="hint" style="margin-bottom:8px">製品・下台・上蓋・表示状態をまとめて保存し、後でワンクリックで呼び出せます。保存先はこの端末のブラウザ内のみで、他の人やサーバとは共有されません。</div>
+      <div class="presetSaveRow">
+        <input type="text" id="presetName" placeholder="プリセット名（例: φ1200 3条 パレット）" maxlength="60">
+        <button id="presetSaveBtn">現在の設定を保存</button>
+      </div>
+      <div id="presetList"></div>
+    </section>
+
+    <details class="psy">
+      <summary>この画面の設計メモ（認知心理学の適用）</summary>
+      <ul>
+        <li><b>段階的開示</b>：選んだ製品・下台に関係する項目だけを表示し、作動記憶の負荷を下げる。</li>
+        <li><b>チャンク化</b>：手順どおり「製品→包み方→下台→状態→資材」の5群に分割（7±2以内）。</li>
+        <li><b>再認優先（recognition over recall）</b>：数値入力ではなく選択肢・スライダで、思い出させず選ばせる。</li>
+        <li><b>即時フィードバック</b>：全操作が0.1秒以内に3D・資材リストへ反映され、因果が学習しやすい。</li>
+        <li><b>自然な対応づけ</b>：状態プリセットは実作業の解体順（完全→蓋外し→開梱→下台）で並ぶ。レイヤ一覧も下から積む順。</li>
+        <li><b>ゲシュタルト（類同・近接）</b>：3Dの色＝凡例チップ＝資材リストの色を一致させ、対応を色で束ねる。</li>
+        <li><b>誤り防止（制約の可視化）</b>：「板×スキッド不可」「横向きコイル・スキッドは上蓋なし」「コイル全幅≦1600」を選ばせない形で提示し理由を明記。</li>
+        <li><b>注意誘導</b>：資材リストの行ホバーで該当部材のみ強調し、探索コストを削減。</li>
+        <li><b>接地の手がかり</b>：接地影と遠近感で姿勢（横向き/上向き）の判断を助ける。</li>
+        <li><b>再認記憶の外部化</b>：設定プリセットは名前付きで一覧表示し、条件を覚えていなくても見つけられるようにする。</li>
+      </ul>
+    </details>
+  </aside>
+
+  <!-- ================= 3D ================= -->
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="chips"></div>
+    <div id="views">
+      <button data-v="iso">斜め（全体）</button>
+      <button data-v="front">正面</button>
+      <button data-v="side">側面</button>
+      <button data-v="top">上面</button>
+      <button data-v="fit">ズームリセット</button>
+      <div class="vsep"></div>
+      <button id="pngSaveBtn" class="primary">PNG画像で保存</button>
+    </div>
+    <div id="opHint">ドラッグ: 回転 ／ ホイール・ピンチ: 拡大縮小 ／ ダブルクリック: 視点リセット</div>
+    <div id="bandNote">分解表示中はバンドを外した状態で表示しています</div>
+  </div>
+</main>
+
+<script>
+'use strict';
+/* =========================================================================
+   鋼材梱包 3Dビューア
+   - 依存ライブラリなし。Canvas 2D + ペインターアルゴリズムの簡易3D。
+   - 構成: 状態 S → buildScene()（形状と資材リストを同一ロジックで生成）→ draw()
+   ========================================================================= */
+
+/* ---------- 状態 ---------- */
+const S = {
+  type:'coil',
+  coil:{ od:1200, id:610, n:3, w:180, orient:'wall', unit:'batch' },
+  plate:{ L:2400, W:1100, t:6, n:12, unit:'batch', k:4 },
+  base:{ kind:'pallet', gap:30, margin:20 },
+  lid:{ mode:'sym' },
+  show:{ base:true, prod:true, wrap:true, lid:true, bandL:true, bandC:true },
+  explode:0,
+  hl:null,
+};
+
+/* ---------- 資材マスタ（色は3D・凡例・リストで共通 = ゲシュタルト類同） ---------- */
+const MAT = {
+  deck:   {label:'デッキボード（下台）', color:'#d89f5e', g:'base'},
+  bearer: {label:'滑材（下台けた）',     color:'#b5834c', g:'base'},
+  skidT:  {label:'角材 上段（スキッド）', color:'#c89058', g:'base'},
+  skidB:  {label:'角材 下段（スキッド）', color:'#a9763f', g:'base'},
+  lidB:   {label:'天板（上蓋）',         color:'#e5b273', g:'lid'},
+  lidBr:  {label:'押えけた（上蓋）',     color:'#c79055', g:'lid'},
+  steel:  {label:'', color:'#c9cfd4', g:'prod'},
+  wrap:   {label:'包装紙（クラフト）',   color:'#ebdfc4', g:'wrap'},
+  bandL:  {label:'固定バンド（上下締め）', color:'#3c5068', g:'bandL'},
+  bandC:  {label:'固定バンド（コイル回し）', color:'#273744', g:'bandC'},
+  nail:   {label:'釘（副資材）',         color:'#8a8f94', g:'base'},
+};
+const GROUPS = [
+  ['base','下台'], ['prod','製品'], ['wrap','包装紙'], ['lid','上蓋'],
+  ['bandL','バンド(上下)'], ['bandC','バンド(コイル)'],
+];
+const GCOLOR = {base:'#c08a4e', prod:'#c9cfd4', wrap:'#ebdfc4', lid:'#e5b273', bandL:'#3c5068', bandC:'#273744'};
+/* 描画レイヤ（内→外）。奥行きが拮抗したとき外側のレイヤを必ず手前に描く。
+   バンドは最外のため大きく手前に寄せる（裏側に回った分は視線遮蔽判定で除外する） */
+const LAYER = {prod:0, wrap:1, base:2, lid:8, bandL:16, bandC:16};
+const LAYER_EPS = 18;   // 1レイヤ差あたりの奥行きバイアス(mm)
+const SUBDIV = 320;     // これより長い辺を持つ面は格子分割して前後判定を安定させる
+
+/* ---------- 小さなベクタ演算 ---------- */
+const vsub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const vcross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const vdot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const vnorm=a=>{const l=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/l,a[1]/l,a[2]/l];};
+
+const LIGHT = vnorm([0.45, 0.85, 0.32]);
+
+/* ---------- シーン(面リスト)・資材リスト ---------- */
+let FACES=[], BOM=[], BOUNDS=null, SUMMARY=[], HASCOILBAND=false, HASLID=true;
+/* バンド経路計算用に、立体（箱・円筒）の一覧も保持する */
+let SOLIDS=[];
+
+function shadeHex(hex, f){
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  const m=v=>Math.max(0,Math.min(255,Math.round(v)));
+  return `rgb(${m(r*f)},${m(g*f)},${m(b*f)})`;
+}
+/* 面を登録: pts(反時計回り推奨), ref=外向きの目安ベクトル, opt={two,tone}
+   大きな四角形は格子分割して登録する（ペインターアルゴリズムの前後判定を安定させる）。
+   edges は分割セルの外形線マスク [p0p1,p1p2,p2p3,p3p0]（内部の継ぎ目は輪郭を描かない） */
+function addFace(key, grp, color, pts, ref, opt={}, edges){
+  if(pts.length===4 && !opt.nosub){
+    const len=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]);
+    const lim=opt.sub||SUBDIV;
+    const nu=Math.min(9, Math.ceil(len(pts[0],pts[1])/lim));
+    const nv=Math.min(9, Math.ceil(len(pts[1],pts[2])/lim));
+    if(nu>1 || nv>1){
+      const mix=(a,b,t)=>[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t];
+      const P=(u,v)=>mix(mix(pts[0],pts[1],u), mix(pts[3],pts[2],u), v);
+      const em=edges||[1,1,1,1];
+      const o2=Object.assign({}, opt, {nosub:true});
+      for(let i=0;i<nu;i++)for(let j=0;j<nv;j++){
+        addFace(key,grp,color,
+          [P(i/nu,j/nv), P((i+1)/nu,j/nv), P((i+1)/nu,(j+1)/nv), P(i/nu,(j+1)/nv)],
+          ref, o2,
+          [j===0&&em[0], i===nu-1&&em[1], j===nv-1&&em[2], i===0&&em[3]]);
+      }
+      return;
+    }
+  }
+  let n = vcross(vsub(pts[1],pts[0]), vsub(pts[2],pts[0]));
+  n = vnorm(n);
+  if (ref && vdot(n,ref)<0) n=[-n[0],-n[1],-n[2]];
+  // 照明はビルド時に固定計算（トゥーン風に4段階へ量子化）
+  let d = Math.max(0, vdot(n, LIGHT));
+  let k = 0.60 + 0.40*d;
+  k = k<0.70?0.66 : k<0.80?0.78 : k<0.90?0.88 : 1.0;
+  k += (opt.tone||0);
+  let cx=0,cy=0,cz=0;
+  for(const p of pts){cx+=p[0];cy+=p[1];cz+=p[2];}
+  FACES.push({
+    k:key, g:grp, p:pts, n,
+    two:!!opt.two, e:(edges&&(!edges[0]||!edges[1]||!edges[2]||!edges[3]))?edges:null,
+    oc:opt.oc||null, // この面を完全に覆う外側グループ（表示中は描画を省く）
+    db:opt.dbias||0, // 追加の奥行きバイアス（+で奥扱い=先に描く）
+    cx:cx/pts.length, cy:cy/pts.length, cz:cz/pts.length,
+    fill:shadeHex(color,k), stroke:shadeHex(color,k*0.82),
+  });
+  for(const p of pts){
+    if(!BOUNDS){BOUNDS={x0:p[0],x1:p[0],y0:p[1],y1:p[1],z0:p[2],z1:p[2]};}
+    else{
+      if(p[0]<BOUNDS.x0)BOUNDS.x0=p[0]; if(p[0]>BOUNDS.x1)BOUNDS.x1=p[0];
+      if(p[1]<BOUNDS.y0)BOUNDS.y0=p[1]; if(p[1]>BOUNDS.y1)BOUNDS.y1=p[1];
+      if(p[2]<BOUNDS.z0)BOUNDS.z0=p[2]; if(p[2]>BOUNDS.z1)BOUNDS.z1=p[2];
+    }
+  }
+}
+
+/* 直方体 (中心と寸法) */
+function addBox(key,grp,color, cx,cy,cz, sx,sy,sz, opt={}){
+  SOLIDS.push({t:'box', g:grp, cx,cy,cz, sx,sy,sz});
+  const x0=cx-sx/2,x1=cx+sx/2, y0=cy-sy/2,y1=cy+sy/2, z0=cz-sz/2,z1=cz+sz/2;
+  const fo={tone:opt.tone||0, oc:opt.oc};
+  addFace(key,grp,color, [[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]], [1,0,0], fo);
+  addFace(key,grp,color, [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]], [-1,0,0],fo);
+  addFace(key,grp,color, [[x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0]], [0,1,0], fo);
+  addFace(key,grp,color, [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]], [0,-1,0],fo);
+  addFace(key,grp,color, [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], [0,0,1], fo);
+  addFace(key,grp,color, [[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],[x1,y0,z0]], [0,0,-1],fo);
+}
+
+/* 円筒/リング。axis:'x'|'y'。Ri>0で中空。caps=[start,end] */
+function addTube(key,grp,color, C, axis, Ro, Ri, len, seg, opt={}){
+  const caps = opt.caps||[true,true];
+  const t0=-len/2, t1=len/2;
+  const pt=(th,R,t)=>{
+    const s=Math.sin(th)*R, c=Math.cos(th)*R;
+    return axis==='y' ? [C[0]+s, C[1]+t, C[2]+c] : [C[0]+t, C[1]+s, C[2]+c];
+  };
+  const rad=(th)=>{
+    const s=Math.sin(th), c=Math.cos(th);
+    return axis==='y' ? [s,0,c] : [0,s,c];
+  };
+  SOLIDS.push({t:'cyl', g:grp, axis, C:[C[0],C[1],C[2]], Ro, len});
+  const A = axis==='y'?[0,1,0]:[1,0,0];
+  for(let i=0;i<seg;i++){
+    const a=i/seg*Math.PI*2, b2=(i+1)/seg*Math.PI*2;
+    const tone=(opt.tone||0)+(opt.alt? (i%2? opt.alt : -opt.alt) : 0);
+    const rm=rad((a+b2)/2);
+    // 外周
+    if(!opt.noOuter)
+      addFace(key,grp,color,[pt(a,Ro,t0),pt(b2,Ro,t0),pt(b2,Ro,t1),pt(a,Ro,t1)], rm, {tone, oc:opt.ocOuter, sub:opt.sub, dbias:opt.dbias});
+    // 内周（中空のみ / 穴から見える面）
+    if(Ri>0.5 && !opt.noInner)
+      addFace(key,grp,color,[pt(a,Ri,t0),pt(b2,Ri,t0),pt(b2,Ri,t1),pt(a,Ri,t1)], [-rm[0],-rm[1],-rm[2]],
+        {tone:tone-0.06, oc:opt.ocInner, sub:opt.sub, dbias:(opt.dbiasIn!==undefined?opt.dbiasIn:opt.dbias)});
+    // 端面（円筒面より内側にあるため、capBiasで奥扱いにして先に描ける。
+    // capBias は数値または [開始側, 終端側]: 露出する端面と内部に隠れる端面で描画順を分ける）
+    const capTone = opt.capAlt ? (i%2? opt.capAlt:-opt.capAlt) : tone*0.5;
+    const cbA = Array.isArray(opt.capBias)? opt.capBias : [opt.capBias||0, opt.capBias||0];
+    if(caps[1]){
+      const P = Ri>0.5
+        ? [pt(a,Ro,t1),pt(b2,Ro,t1),pt(b2,Ri,t1),pt(a,Ri,t1)]
+        : [pt(a,Ro,t1),pt(b2,Ro,t1),[C[0]+(axis==='y'?0:t1),C[1]+(axis==='y'?t1:0),C[2]]];
+      addFace(key,grp,color,P, A, {tone:capTone, dbias:cbA[1], sub:opt.sub});
+    }
+    if(caps[0]){
+      const P = Ri>0.5
+        ? [pt(a,Ro,t0),pt(a,Ri,t0),pt(b2,Ri,t0),pt(b2,Ro,t0)]
+        : [pt(a,Ro,t0),[C[0]+(axis==='y'?0:t0),C[1]+(axis==='y'?t0:0),C[2]],pt(b2,Ro,t0)];
+      addFace(key,grp,color,P, [-A[0],-A[1],-A[2]], {tone:capTone, dbias:cbA[0], sub:opt.sub});
+    }
+  }
+}
+
+/* 帯（バンド）: 平面内の閉じた折れ線 → 幅 w のリボン。mapper(a,b)->[x,y,z] */
+function addRibbon(key,grp,color, pts2, mapper, widthVec, w, opt={}){
+  const seg=[];
+  for(let i=0;i<pts2.length;i++){
+    const a=pts2[i], b=pts2[(i+1)%pts2.length];
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    const n=Math.max(1, Math.ceil(len/140));
+    for(let j=0;j<n;j++){
+      seg.push([a[0]+(b[0]-a[0])*j/n, a[1]+(b[1]-a[1])*j/n]);
+    }
+  }
+  const half=[widthVec[0]*w/2, widthVec[1]*w/2, widthVec[2]*w/2];
+  let L=0;
+  for(let i=0;i<seg.length;i++){
+    const a=seg[i], b=seg[(i+1)%seg.length];
+    L+=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    const A=mapper(a[0],a[1]), B=mapper(b[0],b[1]);
+    addFace(key,grp,color,
+      [[A[0]-half[0],A[1]-half[1],A[2]-half[2]],
+       [B[0]-half[0],B[1]-half[1],B[2]-half[2]],
+       [B[0]+half[0],B[1]+half[1],B[2]+half[2]],
+       [A[0]+half[0],A[1]+half[1],A[2]+half[2]]],
+      null, {two:true});
+  }
+  return L;
+}
+
+/* ---------- バンド経路（物理的に張った形 = 断面の凸包） ---------- */
+/* 平面(plane='x'|'z', at=位置)で各立体を切り、断面点群を(u,y)で返す */
+function bandSupports(plane, at, groups){
+  const pts=[];
+  for(const s of SOLIDS){
+    if(!groups.includes(s.g)) continue;
+    if(s.t==='box'){
+      const c = plane==='x'? s.cx : s.cz, half = plane==='x'? s.sx/2 : s.sz/2;
+      if(at < c-half-0.5 || at > c+half+0.5) continue;
+      const u = plane==='x'? s.cz : s.cx, uh = plane==='x'? s.sz/2 : s.sx/2;
+      const y0=s.cy-s.sy/2, y1=s.cy+s.sy/2;
+      pts.push([u-uh,y0],[u+uh,y0],[u+uh,y1],[u-uh,y1]);
+    }else if(s.axis==='x'){
+      if(plane==='x'){
+        if(Math.abs(at-s.C[0])>s.len/2+0.5) continue;
+        // 円は細かくサンプリングし、バンドの弦が円筒面より内側に沈まないようにする
+        for(let i=0;i<64;i++){const a=i/64*2*Math.PI; pts.push([s.C[2]+Math.cos(a)*s.Ro, s.C[1]+Math.sin(a)*s.Ro]);}
+      }else{
+        const d=Math.abs(at-s.C[2]); if(d>=s.Ro-0.5) continue;
+        const h=Math.sqrt(s.Ro*s.Ro-d*d);
+        pts.push([s.C[0]-s.len/2,s.C[1]-h],[s.C[0]+s.len/2,s.C[1]-h],[s.C[0]+s.len/2,s.C[1]+h],[s.C[0]-s.len/2,s.C[1]+h]);
+      }
+    }else{ // axis 'y'
+      const d = plane==='x'? Math.abs(at-s.C[0]) : Math.abs(at-s.C[2]);
+      if(d>=s.Ro-0.5) continue;
+      const h=Math.sqrt(s.Ro*s.Ro-d*d);
+      const u = plane==='x'? s.C[2] : s.C[0];
+      pts.push([u-h,s.C[1]-s.len/2],[u+h,s.C[1]-s.len/2],[u+h,s.C[1]+s.len/2],[u-h,s.C[1]+s.len/2]);
+    }
+  }
+  return pts;
+}
+/* 凸包（Andrew monotone chain, 反時計回り） */
+function hull2(pts){
+  const p=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[];
+  for(const q of p){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],q)<=0) lo.pop(); lo.push(q); }
+  const up=[];
+  for(let i=p.length-1;i>=0;i--){ const q=p[i]; while(up.length>=2&&cr(up[up.length-2],up[up.length-1],q)<=0) up.pop(); up.push(q); }
+  lo.pop(); up.pop();
+  return lo.concat(up);
+}
+/* 凸包を外側へdだけ膨らませる（バンドが表面に載る分） */
+function inflate(h, d){
+  const n=h.length, out=[];
+  for(let i=0;i<n;i++){
+    const p=h[i], a=h[(i-1+n)%n], b=h[(i+1)%n];
+    let n1=[p[1]-a[1], a[0]-p[0]], n2=[b[1]-p[1], p[0]-b[0]];
+    const l1=Math.hypot(n1[0],n1[1])||1, l2=Math.hypot(n2[0],n2[1])||1;
+    let vx=n1[0]/l1+n2[0]/l2, vy=n1[1]/l1+n2[1]/l2;
+    const l=Math.hypot(vx,vy)||1;
+    out.push([p[0]+vx/l*d, p[1]+vy/l*d]);
+  }
+  return out;
+}
+/* 断面内の最外部材（角板・けた・円筒）に密着する张力バンドを1本掛ける */
+function addBandLoop(key, plane, at, groups, bw){
+  const pts=bandSupports(plane, at, groups);
+  if(pts.length<3) return 0;
+  const loop=inflate(hull2(pts), 5);
+  const mapper = plane==='x' ? (u,v)=>[at,v,u] : (u,v)=>[u,v,at];
+  const wv = plane==='x' ? [1,0,0] : [0,0,1];
+  return addRibbon(key, MAT[key].g, MAT[key].color, loop, mapper, wv, bw||30);
+}
+
+/* ---------- BOM ---------- */
+function bomAdd(key,label,spec,qty,unit,extra){
+  const r=BOM.find(r=>r.key===key && r.spec===spec);
+  if(r){ r.qty+=qty; if(extra){for(const k in extra) r[k]=(r[k]||0)+extra[k];} }
+  else BOM.push(Object.assign({key,label,spec,qty,unit}, extra||{}));
+}
+
+/* =========================================================================
+   シーン構築（形状と資材リストを同時生成 = 単一情報源）
+   ========================================================================= */
+const PAL={deckT:40, deckW:115, bearer:90, skid:100, lidT:40, lidW:115, lidXT:25, lidXBr:60};
+
+function buildScene(){
+  FACES=[]; BOM=[]; BOUNDS=null; SUMMARY=[]; HASCOILBAND=false; SOLIDS=[]; S._coilCull=null; S._cullBox=null;
+  const m=S.base.margin, gap=S.base.gap, pallet=S.base.kind==='pallet';
+  // 仕様: 上蓋はパレットのみ。ただし横向きコイルは上蓋不要（バンドで下台に固定）
+  HASLID = pallet && !(S.type==='coil' && S.coil.orient==='wall');
+  const ex=S.explode/100;
+  const EX = { prod:0, wrap:0, lid:0 };
+
+  let footX, footZ, round=false;       // 下台の外形
+  let prodTopY=0;                       // 製品(包装含む)上端
+  let woodVol=0, woodCnt=0, nails=0, paperArea=0, paperSheets=0;
+
+  /* ---- 製品パラメータ ---- */
+  let R=0, Ri=0, totW=0, N=1, w=0;
+  if(S.type==='coil'){
+    R=S.coil.od/2; Ri=S.coil.id/2; N=S.coil.n; w=S.coil.w; totW=N*w;
+    if(S.coil.orient==='wall'){ footX=totW+m; footZ=S.coil.od+m; }
+    else { footX=S.coil.od+m; footZ=S.coil.od+m; round=true; }
+  }else{
+    footX=S.plate.L+m; footZ=S.plate.W+m;
+  }
+
+  /* ---- 下台 ---- */
+  let baseH=0, deckTopY=0;
+  if(pallet){
+    baseH=PAL.bearer+PAL.deckT;
+    deckTopY=baseH;
+    // けた（下段・Z方向）: 丸パレットは中央+両脇の3本
+    const nB = (round||footX>1500)?3:2;
+    const bxs = round ? [-footX*0.30,0,footX*0.30]
+              : nB===3?[-footX/2+PAL.bearer/2+15,0,footX/2-PAL.bearer/2-15]
+                      :[-footX/2+PAL.bearer/2+15, footX/2-PAL.bearer/2-15];
+    for(const bx of bxs){
+      let blen=footZ;
+      if(round){ blen=2*Math.sqrt(Math.max(0,(footZ/2)**2-bx*bx))*0.96; if(blen<PAL.bearer*1.6) continue; }
+      addBox('bearer','base',MAT.bearer.color, bx,PAL.bearer/2,0, PAL.bearer,PAL.bearer,blen);
+      bomAdd('bearer',MAT.bearer.label,`${PAL.bearer}×${PAL.bearer}×${Math.round(blen)}`,1,'本',{vol:PAL.bearer*PAL.bearer*blen});
+      woodCnt++; woodVol+=PAL.bearer*PAL.bearer*blen;
+    }
+    // デッキボード（上段・X方向、Z方向に隙間gapで並べる）
+    const bw=PAL.deckW;
+    let nD=Math.floor((footZ+gap)/(bw+gap));
+    nD=Math.max(2,nD);
+    let span=nD*bw+(nD-1)*gap;
+    if(span>footZ+60){ nD=Math.max(2,nD-1); span=nD*bw+(nD-1)*gap; }
+    for(let i=0;i<nD;i++){
+      const z=-span/2+bw/2+i*(bw+gap);
+      let blen=footX;
+      if(round){
+        const zz=Math.min(footZ/2-1, Math.abs(z)+bw/2);
+        blen=2*Math.sqrt(Math.max(0,(footX/2)**2-zz*zz));
+        if(blen<90) continue;
+      }
+      addBox('deck','base',MAT.deck.color, 0,PAL.bearer+PAL.deckT/2,z, blen,PAL.deckT,bw, {tone:(i%2?0.02:-0.02)});
+      bomAdd('deck',MAT.deck.label, round?`${PAL.deckT}×${bw}×可変(≦${Math.round(footX)})`:`${PAL.deckT}×${bw}×${Math.round(footX)}`,1,'本',{vol:PAL.deckT*bw*blen});
+      woodCnt++; woodVol+=PAL.deckT*bw*blen;
+      nails+=bxs.length*2;
+    }
+  }else{
+    /* スキッド: 角材を井桁に重ねただけ */
+    baseH=PAL.skid*2; deckTopY=baseH;
+    // 下段（Z方向）
+    const nBot=footX>1200?3:2;
+    const xs = nBot===3?[-footX/2+PAL.skid/2+10,0,footX/2-PAL.skid/2-10]
+                       :[-footX/2+PAL.skid/2+10, footX/2-PAL.skid/2-10];
+    for(const x of xs){
+      addBox('skidB','base',MAT.skidB.color, x,PAL.skid/2,0, PAL.skid,PAL.skid,footZ);
+      bomAdd('skidB',MAT.skidB.label,`${PAL.skid}×${PAL.skid}×${Math.round(footZ)}`,1,'本',{vol:PAL.skid*PAL.skid*footZ});
+      woodCnt++; woodVol+=PAL.skid*PAL.skid*footZ;
+    }
+    if(S.type==='coil' && S.coil.orient==='wall'){
+      /* 上段: コイル用の斜め受け材（クレードル）。傾斜面がコイル円周と接する */
+      const wS=PAL.skid, hB=PAL.skid, Rw2=R+5;
+      const rs=Math.min(footZ/2-wS/2-8, Math.max(wS*1.2, R*0.55));
+      let hi=140, lo=70;
+      // 傾斜面(内側上端→外側上端の線)に円(半径Rw2)が接する中心高さ
+      const solveCy=(hiV,loV)=>{
+        const z1=rs+wS/2, y1=hB+hiV, z2=rs-wS/2, y2=hB+loV;
+        const a2=y2-y1, b2v=-(z2-z1), L2=Math.hypot(a2,b2v);
+        const c2=-(a2*z1+b2v*y1);
+        let v=(Rw2*L2-c2)/b2v;
+        if(!(v>y1)) v=(-Rw2*L2-c2)/b2v;
+        return v;
+      };
+      let cyC=solveCy(hi,lo);
+      // コイル底が下段角材(上面hB)に食い込むなら受け材を高くする
+      const clear=(cyC-Rw2)-(hB+8);
+      if(clear<0){ hi-=clear; lo-=clear; cyC=solveCy(hi,lo); }
+      S._cradleCy=cyC;
+      for(const sgn of [-1,1]){
+        const zo=sgn*(rs+wS/2), zi=sgn*(rs-wS/2);
+        const xa=-footX/2, xb=footX/2;
+        const A=[xa,hB,zi],B=[xb,hB,zi],C2=[xb,hB,zo],D=[xa,hB,zo];
+        const E=[xa,hB+lo,zi],F=[xb,hB+lo,zi],G=[xb,hB+hi,zo],H=[xa,hB+hi,zo];
+        const cOpt={dbias:90, sub:150}; // コイルの陰に入るため先描き
+        addFace('skidT','base',MAT.skidT.color,[A,B,C2,D],[0,-1,0],cOpt);
+        addFace('skidT','base',MAT.skidT.color,[A,B,F,E],[0,0,-sgn],cOpt);
+        addFace('skidT','base',MAT.skidT.color,[D,C2,G,H],[0,0,sgn],cOpt);
+        addFace('skidT','base',MAT.skidT.color,[E,F,G,H],[0,1,-0.45*sgn],cOpt); // 斜め受け面
+        addFace('skidT','base',MAT.skidT.color,[A,E,H,D],[-1,0,0],cOpt);
+        addFace('skidT','base',MAT.skidT.color,[B,C2,G,F],[1,0,0],cOpt);
+        // バンドはこの受け材に掛ける（凸包用に'cradle'グループで登録）
+        SOLIDS.push({t:'box',g:'cradle',cx:0,cy:hB+hi/2,cz:sgn*rs,sx:footX,sy:hi,sz:wS});
+        bomAdd('skidT','受け材（斜めコイル受け）',`${wS}×${Math.round(hi)}/${Math.round(lo)}×${Math.round(footX)}`,1,'本',{vol:wS*(hi+lo)/2*footX});
+        woodCnt++; woodVol+=wS*(hi+lo)/2*footX;
+      }
+      nails+=xs.length*2*2;
+    }else{
+      // 上段（X方向）: 井桁に等配置
+      const zs = footZ>1200?[-footZ/2+PAL.skid/2+10,0,footZ/2-PAL.skid/2-10]
+                           :[-footZ/2+PAL.skid/2+10, footZ/2-PAL.skid/2-10];
+      for(const z of zs){
+        addBox('skidT','base',MAT.skidT.color, 0,PAL.skid*1.5,z, footX,PAL.skid,PAL.skid);
+        bomAdd('skidT',MAT.skidT.label,`${PAL.skid}×${PAL.skid}×${Math.round(footX)}`,1,'本',{vol:PAL.skid*PAL.skid*footX});
+        woodCnt++; woodVol+=PAL.skid*PAL.skid*footX;
+      }
+      nails+=xs.length*zs.length*2;
+      S._skidZs=zs;
+    }
+  }
+  if(pallet) nails+= (footX>1500?3:2)*2; // けた仮止め
+  bomAdd('nail',MAT.nail.label,'N90',Math.round(nails),'本');
+
+  /* ---- 分解表示のオフセット（各層が完全に分離する距離） ---- */
+  const H0 = S.type==='coil' ? (S.coil.orient==='wall'? S.coil.od : totW) : S.plate.t*S.plate.n;
+  EX.prod = ex*Math.max(160, H0*0.35);
+  EX.wrap = EX.prod + ex*(H0+130);
+  EX.lid  = ex*170;
+
+  const CONTACT=6; // 接触面の描画分離（重なり面のチラつき防止）
+  const wrapGap=5, wrapT=3;
+
+  /* ---- 製品と包装 ---- */
+  const wrapUnits=[];
+  if(S.type==='coil' && S.coil.orient==='wall'){
+    /* 横向き(eye to wall): 軸=X。スキッド（斜め受け材）で円周を受ける */
+    let cy;
+    if(pallet) cy=deckTopY+CONTACT+R; // 仕様上は到達しない（横向きはスキッド固定）
+    else cy=S._cradleCy;
+    const y=cy+EX.prod;
+    for(let i=0;i<N;i++){
+      const cx=-totW/2+w/2+i*w + (i-(N-1)/2)*1.0;
+      addTube('steel','prod',MAT.steel.color,[cx,y,0],'x',R,Ri,w-3,40,
+        {alt:0.012, tone:(i%2?0.05:-0.02), ocOuter:'wrap', ocInner:'wrap', sub:150,
+         capBias:[i===0?60:2500, i===N-1?60:2500]}); // 露出端面は奥扱い / 条間の隠れ端面は最奥扱い
+    }
+    bomAdd('steel', N>1?'アルミスリットコイル':'アルミコイル', `φ${S.coil.od}×内φ${S.coil.id}×幅${w}`, N,'条');
+    prodTopY=y+R;
+    // 包装紙: 円周方向(円筒部)のみ。端面は縁の折返しリングだけ覆う
+    const yw=cy+EX.prod+ (ex>0? EX.wrap-EX.prod:0);
+    const addWallWrap=(cx,width)=>{
+      const Rw=R+wrapGap;
+      addTube('wrap','wrap',MAT.wrap.color,[cx,yw,0],'x',Rw,Rw-wrapT,width,56,{alt:0.015, caps:[false,false], sub:170, dbias:-55, dbiasIn:80});
+      const lip=Math.min(90, R-Ri>140? 80 : (R-Ri)*0.5);
+      addTube('wrap','wrap',MAT.wrap.color,[cx-width/2+1,yw,0],'x',Rw,R-lip,2,56,{alt:0.015, caps:[true,false], capBias:-80});
+      addTube('wrap','wrap',MAT.wrap.color,[cx+width/2-1,yw,0],'x',Rw,R-lip,2,56,{alt:0.015, caps:[false,true], capBias:-80});
+      // 内径部のライニング（穴はふさがず、内周円筒に沿って包む。
+      // 外周面はアルミ内径と密着し常に不可視のため内面のみ描く）
+      addTube('wrap','wrap',MAT.wrap.color,[cx,yw,0],'x',Ri-2,Ri-2-wrapT,width,32,{alt:0.015, caps:[false,false], noOuter:true, sub:90, dbias:2000});
+      const area=(2*Math.PI*Rw*1.1*(width+2*100) + 2*Math.PI*Ri*width*1.05)/1e6;
+      paperArea+=area; paperSheets++;
+      wrapUnits.push({cx,width});
+    };
+    if(S.coil.unit==='batch') addWallWrap(0, totW+4);
+    else for(let i=0;i<N;i++) addWallWrap(-totW/2+w/2+i*w, w-4);
+    prodTopY=Math.max(prodTopY, yw+R+wrapGap);
+
+    /* バンドの遮蔽判定用: コイル円筒（横向き）。穴越しに見える「向こう側のバンド」を
+       描画時に間引くために使う */
+    S._coilCull={yc:cy+EX.prod, R:R+wrapGap-1, x0:-totW/2-6, x1:totW/2+6};
+
+    /* コイル回しバンド（仕様: 幅30mm・1条あたり2本。ただし条内に収まらない、
+       またはバンド間30mmを確保できない場合は1本。
+       経路はコイル円周に沿い、下台の上の受け材（クレードル）に掛ける） */
+    HASCOILBAND=true;
+    {
+      const bandW=30, bxs=[];
+      for(let i=0;i<N;i++){
+        const c0=-totW/2+w/2+i*w;
+        if(w>=bandW*2+30){ // 2本(30×2)+間隔30が条幅に収まる
+          const d=Math.min(w-bandW, Math.max(bandW+30, w*0.45));
+          bxs.push(c0-d/2, c0+d/2);
+        }else bxs.push(c0);
+      }
+      let totalLen=0;
+      for(const xi of bxs) totalLen+=addBandLoop('bandC','x',xi,['prod','wrap','cradle'],bandW);
+      bomAdd('bandC',MAT.bandC.label,'幅30 スチール',bxs.length,'本',{len:(totalLen+150*bxs.length)/1000});
+    }
+  }
+  else if(S.type==='coil'){
+    /* 上向き(eye to sky): 軸=Y、条は縦積み */
+    const y0=deckTopY+CONTACT;
+    for(let i=0;i<N;i++){
+      const cy=y0+w/2+i*w + EX.prod + i*1.5;
+      addTube('steel','prod',MAT.steel.color,[0,cy,0],'y',R,Ri,w-3,40,
+        {alt:0.012, tone:(i%2?0.05:-0.02), ocOuter:'wrap', ocInner:'wrap', sub:150,
+         capBias:[2500, i===N-1?60:2500]});
+    }
+    bomAdd('steel', N>1?'アルミスリットコイル':'アルミコイル', `φ${S.coil.od}×内φ${S.coil.id}×幅${w}`, N,'条');
+    prodTopY=y0+totW+EX.prod;
+    /* 包装紙: 円筒部（外周・内径部）＋端面。穴はふさがず内周に沿ってライニング */
+    const addSkyWrap=(yc,h)=>{
+      const Rw=R+wrapGap, hole=Ri-2;
+      addTube('wrap','wrap',MAT.wrap.color,[0,yc,0],'y',Rw,Rw-wrapT,h,56,{alt:0.015,caps:[false,false], sub:170, dbias:-55, dbiasIn:80});
+      // 上端面（穴縁まで。放射状の折り目トーン）
+      addTube('wrap','wrap',MAT.wrap.color,[0,yc+h/2-1,0],'y',Rw,hole,2,56,{capAlt:0.03,caps:[false,true],noInner:true, capBias:30, sub:110});
+      // 下端面リング
+      addTube('wrap','wrap',MAT.wrap.color,[0,yc-h/2+1,0],'y',Rw,hole,2,56,{capAlt:0.025,caps:[true,false],noInner:true, capBias:30, sub:110});
+      // 内径部のライニング（全高。穴は開けたまま内周円筒に沿わせる。内面のみ描画）
+      addTube('wrap','wrap',MAT.wrap.color,[0,yc,0],'y',hole,hole-wrapT,h-4,28,{alt:0.015,caps:[false,false], noOuter:true, sub:90, dbias:2000});
+      const area=(2*Math.PI*Rw*(h+150)+2*Math.PI*(Rw*Rw-hole*hole)*1.15+2*Math.PI*Ri*h*1.05)/1e6;
+      paperArea+=area; paperSheets++;
+    };
+    const yw0=y0+(ex>0?EX.wrap:EX.prod);
+    if(S.coil.unit==='batch') addSkyWrap(yw0+totW/2, totW+8);
+    else for(let i=0;i<N;i++) addSkyWrap(yw0+w/2+i*w+i*1.5, w+2);
+    prodTopY=Math.max(prodTopY, yw0+totW+10);
+    // バンドの遮蔽判定用: 荷の内部に収まる箱（裏側に回ったバンドを描かない）
+    S._cullBox={x0:-R*0.7,x1:R*0.7,z0:-R*0.7,z1:R*0.7,y0:30,y1:prodTopY-15};
+  }
+  else{
+    /* 板: 積層。一括 or k枚ずつの束 */
+    const {L,W,t,n}=S.plate;
+    const y0=deckTopY+CONTACT;
+    const bundles = S.plate.unit==='batch' ? [n] : (()=>{
+      const a=[]; let r=n; while(r>0){a.push(Math.min(S.plate.k,r)); r-=S.plate.k;} return a;})();
+    let yy=y0+EX.prod, bi=0;
+    for(const bn of bundles){
+      const bh=bn*t;
+      // 素の板（束の中身）
+      for(let i=0;i<bn;i++)
+        addBox('steel','prod',MAT.steel.color, 0,yy+t/2+i*t,0, L,Math.max(t,2.5),W,{tone:(i%2?0.03:-0.03), oc:'wrap'});
+      // 束ごとの包装紙（箱包み）: 束の境界が読めるよう寸法を交互に僅かに変える
+      const wy=yy+(ex>0?EX.wrap-EX.prod:0);
+      const o=(bundles.length>1 && bi%2)?9:0;
+      addBox('wrap','wrap',MAT.wrap.color, 0,wy+bh/2, 0, L+9+o, bh+7, W+9+o, {tone:(bi%2?0.055:-0.04)});
+      paperArea+=(2*(L*W)+2*(L+W)*(bh+7))*1.2/1e6; paperSheets++;
+      yy+=bh+2.5; bi++;
+    }
+    bomAdd('steel','アルミ板',`${L}×${W}×t${t}`,n,'枚');
+    prodTopY=yy-2.5+EX.prod*0+ (ex>0? EX.wrap-EX.prod:0);
+    S._cullBox={x0:-L/2+30,x1:L/2-30,z0:-W/2+30,z1:W/2-30,y0:30,y1:Math.max(60,prodTopY-15)};
+  }
+  bomAdd('wrap',MAT.wrap.label,`シート`,paperSheets,'枚',{area:paperArea});
+
+  /* ---- 上蓋（パレットのみ / 対称・直交） ---- */
+  let lidTopY=prodTopY;
+  if(HASLID){
+    const gapL=6, y0=prodTopY+gapL+EX.lid;
+    const mode=S.lid.mode;
+    let bTop=0;
+    if(mode==='sym'){
+      /* 下台の鏡映し: 接触面=天板(X方向) が下、押えけた(Z方向)が上 */
+      const bw=PAL.lidW;
+      let nD=Math.max(2,Math.floor((footZ+gap)/(bw+gap)));
+      let span=nD*bw+(nD-1)*gap;
+      if(span>footZ+60){ nD=Math.max(2,nD-1); span=nD*bw+(nD-1)*gap; }
+      for(let i=0;i<nD;i++){
+        const z=-span/2+bw/2+i*(bw+gap);
+        let blen=footX;
+        if(round){
+          const zz=Math.min(footZ/2-1,Math.abs(z)+bw/2);
+          blen=2*Math.sqrt(Math.max(0,(footX/2)**2-zz*zz)); if(blen<90) continue;
+        }
+        addBox('lidB','lid',MAT.lidB.color, 0,y0+PAL.lidT/2,z, blen,PAL.lidT,bw,{tone:(i%2?0.02:-0.02)});
+        bomAdd('lidB',MAT.lidB.label, round?`${PAL.lidT}×${bw}×可変(≦${Math.round(footX)})`:`${PAL.lidT}×${bw}×${Math.round(footX)}`,1,'本',{vol:PAL.lidT*bw*blen});
+        woodCnt++; woodVol+=PAL.lidT*bw*blen;
+      }
+      const nB=(round||footX>1500)?3:2;
+      const bxs=round?[-footX*0.30,0,footX*0.30]
+               :nB===3?[-footX/2+PAL.bearer/2+15,0,footX/2-PAL.bearer/2-15]:[-footX/2+PAL.bearer/2+15,footX/2-PAL.bearer/2-15];
+      for(const bx of bxs){
+        let blen=footZ;
+        if(round){ blen=2*Math.sqrt(Math.max(0,(footZ/2)**2-bx*bx))*0.96; if(blen<PAL.bearer*1.6) continue; }
+        addBox('lidBr','lid',MAT.lidBr.color, bx,y0+PAL.lidT+PAL.bearer/2,0, PAL.bearer,PAL.bearer,blen);
+        bomAdd('lidBr',MAT.lidBr.label,`${PAL.bearer}×${PAL.bearer}×${Math.round(blen)}`,1,'本',{vol:PAL.bearer*PAL.bearer*blen});
+        woodCnt++; woodVol+=PAL.bearer*PAL.bearer*blen;
+      }
+      bTop=PAL.lidT+PAL.bearer;
+      nailAddLid(nD*bxs.length*2);
+    }else{
+      /* 直交: 接触面の板(Z方向)が下台デッキ(X方向)と90° */
+      const bw=PAL.lidW, tT=PAL.lidXT;
+      let nD=Math.max(2,Math.floor((footX+gap)/(bw+gap)));
+      let span=nD*bw+(nD-1)*gap;
+      if(span>footX+60){ nD=Math.max(2,nD-1); span=nD*bw+(nD-1)*gap; }
+      for(let i=0;i<nD;i++){
+        const x=-span/2+bw/2+i*(bw+gap);
+        let blen=footZ;
+        if(round){
+          const xx=Math.min(footX/2-1,Math.abs(x)+bw/2);
+          blen=2*Math.sqrt(Math.max(0,(footZ/2)**2-xx*xx)); if(blen<90) continue;
+        }
+        addBox('lidB','lid',MAT.lidB.color, x,y0+tT/2,0, bw,tT,blen,{tone:(i%2?0.02:-0.02)});
+        bomAdd('lidB',MAT.lidB.label,`${tT}×${bw}×${round?'可変(≦'+Math.round(footZ)+')':Math.round(footZ)}`,1,'本',{vol:tT*bw*blen});
+        woodCnt++; woodVol+=tT*bw*blen;
+      }
+      const brz = footZ>1400?[-footZ*0.33,0,footZ*0.33]:[-footZ*0.3,footZ*0.3];
+      for(const z of brz){
+        let blen=footX;
+        if(round){ blen=2*Math.sqrt(Math.max(0,(footX/2)**2-z*z))*0.96; if(blen<120) continue; }
+        addBox('lidBr','lid',MAT.lidBr.color, 0,y0+tT+PAL.lidXBr/2,z, blen,PAL.lidXBr,PAL.lidXBr);
+        bomAdd('lidBr',MAT.lidBr.label,`${PAL.lidXBr}×${PAL.lidXBr}×${Math.round(blen)}`,1,'本',{vol:PAL.lidXBr*PAL.lidXBr*blen});
+        woodCnt++; woodVol+=PAL.lidXBr*PAL.lidXBr*blen;
+      }
+      bTop=tT+PAL.lidXBr;
+      nailAddLid(nD*brz.length*2);
+    }
+    lidTopY=y0+bTop;
+  }
+  function nailAddLid(q){ nails+=q; bomAdd('nail',MAT.nail.label,'N90',q,'本'); }
+
+  /* ---- 上下締めバンド（下台と上蓋を固定 / スキッド×上向きは荷ごと締め）
+     経路は断面凸包 = 最外の角板・けた同士に掛けて張った形。横向きコイルは掛けない ---- */
+  if(HASLID || (S.type==='coil'&&S.coil.orient==='sky')){
+    const loops=[];
+    if(S.type==='plate'){
+      const nBd=Math.max(2,Math.min(4, Math.round(S.plate.L/1100)+1));
+      for(let i=0;i<nBd;i++)
+        loops.push({plane:'x', at:-footX/2+footX*(0.14+0.72*i/(nBd-1))});
+    }else{
+      loops.push({plane:'x',at:0});
+      loops.push({plane:'z',at:0});
+    }
+    let totalLen=0;
+    for(const lp of loops) totalLen+=addBandLoop('bandL',lp.plane,lp.at,['base','prod','wrap','lid'],30);
+    if(loops.length) bomAdd('bandL',MAT.bandL.label,'幅30 スチール',loops.length,'本',{len:(totalLen+150*loops.length)/1000});
+  }
+
+  /* ---- 集計・サマリ ---- */
+  S._tot={woodCnt,woodVol,paperArea,
+    bandLen:BOM.filter(r=>r.len).reduce((a,r)=>a+r.len,0),
+    nails:BOM.filter(r=>r.key==='nail').reduce((a,r)=>a+r.qty,0)};
+
+  if(S.type==='coil'){
+    SUMMARY.push(`アルミコイル φ${S.coil.od}×幅${totW}${N>1?`（${N}条）`:''}`);
+    SUMMARY.push(S.coil.orient==='wall'?'横向き（eye to wall）':'上向き（eye to sky）');
+    SUMMARY.push(S.coil.unit==='batch'?'全条一括包装':'条ごと包装');
+  }else{
+    SUMMARY.push(`アルミ板 ${S.plate.L}×${S.plate.W}×t${S.plate.t} ×${S.plate.n}枚`);
+    SUMMARY.push(S.plate.unit==='batch'?'全数一括包装':`${S.plate.k}枚ずつ小分け`);
+  }
+  SUMMARY.push(S.base.kind==='pallet'?`パレット（隙間${gap}）`:'スキッド');
+  SUMMARY.push(`余裕 +${m}`);
+  if(HASLID) SUMMARY.push(S.lid.mode==='sym'?'上蓋: 上下対称':'上蓋: 直交');
+  else SUMMARY.push('上蓋: なし');
+}
+
+/* =========================================================================
+   描画
+   ========================================================================= */
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const cam={yaw:0.78, pitch:0.40, zoom:1};
+let fitDist=4000, target=[0,600,0];
+
+function refit(){
+  if(!BOUNDS) return;
+  target=[(BOUNDS.x0+BOUNDS.x1)/2,(BOUNDS.y0+BOUNDS.y1)/2,(BOUNDS.z0+BOUNDS.z1)/2];
+  const r=Math.hypot(BOUNDS.x1-BOUNDS.x0,BOUNDS.y1-BOUNDS.y0,BOUNDS.z1-BOUNDS.z0)/2;
+  const aspect=cv.clientWidth/Math.max(1,cv.clientHeight);
+  const tanv=Math.tan(16*Math.PI/180)*Math.min(1,aspect);
+  fitDist=Math.max(r*2.05, r/tanv*1.1);
+}
+
+function draw(){
+  const dpr=window.devicePixelRatio||1;
+  const Wp=cv.clientWidth, Hp=cv.clientHeight;
+  if(cv.width!==Wp*dpr||cv.height!==Hp*dpr){cv.width=Wp*dpr; cv.height=Hp*dpr;}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,Wp,Hp);
+
+  const cy=Math.cos(cam.yaw), sy=Math.sin(cam.yaw);
+  const cp=Math.cos(cam.pitch), sp=Math.sin(cam.pitch);
+  const dist=fitDist*cam.zoom;
+  const f=(Hp/2)/Math.tan(16*Math.PI/180);
+  const cxs=Wp/2, cys=Hp/2+Hp*0.02;
+
+  const tf=(p)=>{
+    const x=p[0]-target[0], y=p[1]-target[1], z=p[2]-target[2];
+    const x1=cy*x+sy*z, z1=-sy*x+cy*z;
+    const y2=cp*y-sp*z1, z2=sp*y+cp*z1;
+    const d=dist-z2;
+    return [cxs+f*x1/d, cys-f*y2/d, d, x1,y2,z2];
+  };
+  const rot=(n)=>{
+    const x1=cy*n[0]+sy*n[2], z1=-sy*n[0]+cy*n[2];
+    return [x1, cp*n[1]-sp*z1, sp*n[1]+cp*z1];
+  };
+
+  /* 接地影（接地の手がかり） */
+  if(BOUNDS){
+    ctx.save();
+    const cxm=(BOUNDS.x0+BOUNDS.x1)/2, czm=(BOUNDS.z0+BOUNDS.z1)/2;
+    const rx=(BOUNDS.x1-BOUNDS.x0)/2+90, rz=(BOUNDS.z1-BOUNDS.z0)/2+90;
+    for(const [s,al] of [[1.25,0.05],[1.0,0.07]]){
+      ctx.beginPath();
+      for(let i=0;i<=28;i++){
+        const a=i/28*Math.PI*2;
+        const q=tf([cxm+Math.cos(a)*rx*s, 0, czm+Math.sin(a)*rz*s]);
+        i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);
+      }
+      ctx.fillStyle=`rgba(96,64,30,${al})`; ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /* 面の変換・カリング・ソート */
+  const items=[];
+  const hidden=S.show;
+  const exHideBand=S.explode>2;
+  /* カメラのワールド座標（バンドのコイル遮蔽判定に使用） */
+  const camW=[target[0]-sy*cp*dist, target[1]+sp*dist, target[2]+cy*cp*dist];
+  const cc=S._coilCull, cb=S._cullBox;
+  const prodShown=hidden.prod; // 製品を隠しているときは遮蔽物が無いので判定しない
+  /* 視線がコイル円筒(有限長)を貫くか。貫くなら対象の面はコイルの裏側にある。
+     内径穴を通る視線は円筒壁と交差しないため、穴越しの正当な見えは保たれる */
+  const hiddenByCoil=(fc)=>{
+    const dX=fc.cx-camW[0], dY=fc.cy-camW[1], dZ=fc.cz-camW[2];
+    const Y0=camW[1]-cc.yc, Z0=camW[2];
+    const a=dY*dY+dZ*dZ;
+    if(a<=1e-6) return false;
+    const b=2*(Y0*dY+Z0*dZ), q=Y0*Y0+Z0*Z0-cc.R*cc.R;
+    const disc=b*b-4*a*q;
+    if(disc<=0) return false;
+    const sq=Math.sqrt(disc);
+    let t1=(-b-sq)/(2*a), t2=(-b+sq)/(2*a);
+    if(t1>t2){const w0=t1;t1=t2;t2=w0;}
+    let u1,u2;
+    if(Math.abs(dX)<1e-6){ u1=(camW[0]>=cc.x0&&camW[0]<=cc.x1)?-1e9:1e9; u2=1e9; }
+    else{ u1=(cc.x0-camW[0])/dX; u2=(cc.x1-camW[0])/dX; if(u1>u2){const w0=u1;u1=u2;u2=w0;} }
+    return Math.max(t1,u1,0.02) < Math.min(t2,u2,0.997);
+  };
+  /* 視線が荷の内接ボックスを貫くか（上向きコイル・板のバンド用） */
+  const hiddenByBox=(fc)=>{
+    const dX=fc.cx-camW[0], dY=fc.cy-camW[1], dZ=fc.cz-camW[2];
+    let lo=0.02, hi=0.997;
+    const slabs=[[cb.x0,cb.x1,camW[0],dX],[cb.y0,cb.y1,camW[1],dY],[cb.z0,cb.z1,camW[2],dZ]];
+    for(const sl of slabs){
+      const m0=sl[0],m1=sl[1],o=sl[2],dd=sl[3];
+      if(Math.abs(dd)<1e-9){ if(o<m0||o>m1) return false; }
+      else{
+        let t1=(m0-o)/dd, t2=(m1-o)/dd;
+        if(t1>t2){const w0=t1;t1=t2;t2=w0;}
+        lo=Math.max(lo,t1); hi=Math.min(hi,t2);
+        if(lo>=hi) return false;
+      }
+    }
+    return true;
+  };
+  for(const fc of FACES){
+    if(fc.g==='base'&&!hidden.base) continue;
+    if(fc.g==='prod'&&!hidden.prod) continue;
+    if(fc.g==='wrap'&&!hidden.wrap) continue;
+    if(fc.g==='lid' &&(!hidden.lid||!HASLID)) continue;
+    if(fc.g==='bandL'&&(!hidden.bandL||exHideBand)) continue;
+    if(fc.g==='bandC'&&(!hidden.bandC||exHideBand)) continue;
+    // 外側の層に完全に覆われている面は、その層の表示中は描かない（前後判定ミス防止）
+    if(fc.oc && hidden[fc.oc] && S.explode<=2) continue;
+    // コイルの裏側に回ったバンド・下台の木材は描かない（穴や稜線越しの貫通防止）
+    if(cc && prodShown && (fc.g==='bandC'||fc.g==='bandL'||fc.g==='base') && hiddenByCoil(fc)) continue;
+    // 上向き・板: 荷の裏側に回ったバンドは描かない
+    if(cb && prodShown && (fc.g==='bandC'||fc.g==='bandL') && hiddenByBox(fc)) continue;
+
+    const c=tf([fc.cx,fc.cy,fc.cz]);
+    if(!fc.two){
+      const nv=rot(fc.n);
+      // カメラ位置(view系: (0,0,dist)) → 可視判定
+      const vx=c[3], vy=c[4], vz=c[5]-dist;
+      if(nv[0]*vx+nv[1]*vy+nv[2]*vz>=0) continue;
+    }
+    // 奥行き + レイヤ優先（外側: バンド→木→梱包紙→製品 の順で手前に勝たせる）
+    items.push({d:c[2]-LAYER[fc.g]*LAYER_EPS+fc.db, fc});
+  }
+  items.sort((a,b)=>b.d-a.d);
+
+  const hl=S.hl;
+  for(const it of items){
+    const fc=it.fc;
+    const dim = hl && fc.k!==hl;
+    const qs=[];
+    ctx.beginPath();
+    for(let i=0;i<fc.p.length;i++){
+      const q=tf(fc.p[i]); qs.push(q);
+      i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);
+    }
+    ctx.closePath();
+    ctx.globalAlpha=dim?0.13:1;
+    ctx.fillStyle=fc.fill;
+    ctx.fill();
+    const sc=hl&&!dim?'#8a5a20':fc.stroke;
+    const lw=hl&&!dim?1.4:0.75;
+    if(fc.e){
+      // 分割セル: 継ぎ目は同色で埋め、元の面の外形線だけ濃色で描く
+      ctx.strokeStyle=fc.fill; ctx.lineWidth=1; ctx.stroke();
+      ctx.beginPath();
+      for(let i=0;i<4;i++){
+        if(!fc.e[i]) continue;
+        const q1=qs[i], q2=qs[(i+1)%4];
+        ctx.moveTo(q1[0],q1[1]); ctx.lineTo(q2[0],q2[1]);
+      }
+      ctx.strokeStyle=sc; ctx.lineWidth=lw; ctx.stroke();
+    }else{
+      ctx.strokeStyle=sc; ctx.lineWidth=lw; ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+  document.getElementById('bandNote').style.display=
+    (S.explode>2&&(S.show.bandL||S.show.bandC))?'block':'none';
+}
+
+/* =========================================================================
+   UI
+   ========================================================================= */
+const $=id=>document.getElementById(id);
+const fmt=n=>n.toLocaleString('ja-JP');
+
+function renderChips(){
+  $('chips').innerHTML=SUMMARY.map(s=>`<span>${s}</span>`).join('');
+}
+
+function renderBOM(){
+  const tb=$('bomBody'); tb.innerHTML='';
+  const order=['deck','bearer','skidT','skidB','lidB','lidBr','steel','wrap','bandL','bandC','nail'];
+  BOM.sort((a,b)=>order.indexOf(a.key)-order.indexOf(b.key));
+  for(const r of BOM){
+    if(r.qty<=0) continue;
+    const tr=document.createElement('tr');
+    tr.className='hoverable';
+    const col=MAT[r.key]?MAT[r.key].color:'#999';
+    let spec=r.spec;
+    if(r.key==='wrap') spec=`シート（計 ${r.area.toFixed(1)} m²）`;
+    if(r.len) spec+=`（計 ${r.len.toFixed(1)} m）`;
+    const note=r.key==='nail'?'<div class="subnote">3D表示には含まれません</div>':'';
+    tr.innerHTML=`<td><span class="mchip" style="background:${col}"></span>${r.label}${note}</td>
+                  <td>${spec}</td><td class="q">${fmt(Math.round(r.qty))} ${r.unit}</td>`;
+    tr.addEventListener('mouseenter',()=>{S.hl=r.key; draw();});
+    tr.addEventListener('mouseleave',()=>{S.hl=null; draw();});
+    tb.appendChild(tr);
+  }
+  const t=S._tot;
+  $('totals').innerHTML=
+    `木材 <b>${t.woodCnt}</b> 本（≈ <b>${(t.woodVol/1e9).toFixed(3)}</b> m³） ・ `+
+    `包装紙 <b>${t.paperArea.toFixed(1)}</b> m² ・ `+
+    `バンド <b>${t.bandLen.toFixed(1)}</b> m ・ 釘 <b>${t.nails}</b> 本`;
+}
+
+function renderLayers(){
+  const el=$('layers'); el.innerHTML='';
+  for(const [g,label] of GROUPS){
+    if(g==='lid'&&!HASLID) continue;
+    if(g==='bandC'&&!HASCOILBAND) continue;
+    if(g==='bandL'&&!FACES.some(f=>f.g==='bandL')) continue;
+    const lab=document.createElement('label');
+    lab.innerHTML=`<span class="dot" style="background:${GCOLOR[g]}"></span>`+
+      `<input type="checkbox" ${S.show[g]?'checked':''}>${label}`;
+    lab.querySelector('input').addEventListener('change',e=>{
+      S.show[g]=e.target.checked; syncPresetButtons(); draw();
+    });
+    el.appendChild(lab);
+  }
+}
+
+const PRESETS={
+  full:    {base:1,prod:1,wrap:1,lid:1,bandL:1,bandC:1},
+  lidoff:  {base:1,prod:1,wrap:1,lid:0,bandL:0,bandC:1},
+  open:    {base:1,prod:1,wrap:0,lid:0,bandL:0,bandC:0},
+  baseonly:{base:1,prod:0,wrap:0,lid:0,bandL:0,bandC:0},
+};
+function presetMatches(p){
+  const q=PRESETS[p];
+  const hasBL=FACES.some(f=>f.g==='bandL');
+  for(const g in q){
+    if(g==='lid'&&!HASLID) continue;
+    if(g==='bandC'&&!HASCOILBAND) continue;
+    if(g==='bandL'&&!hasBL) continue;
+    if(!!S.show[g]!==!!q[g]) return false;
+  }
+  return true;
+}
+function syncPresetButtons(){
+  document.querySelectorAll('#presets button').forEach(b=>{
+    if(b.dataset.p==='lidoff'){
+      b.disabled=!HASLID;
+      b.title=HASLID?'':'この構成では上蓋を使いません';
+    }
+    b.setAttribute('aria-pressed', presetMatches(b.dataset.p)?'true':'false');
+  });
+}
+document.querySelectorAll('#presets button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const q=PRESETS[b.dataset.p];
+    for(const g in q) S.show[g]=!!q[g];
+    renderLayers(); syncPresetButtons(); draw();
+  });
+});
+
+/* ---- 入力の反映（値ラベル＝即時フィードバック） ---- */
+function readInputs(){
+  S.coil.od=+$('in_od').value;
+  S.coil.id=+document.querySelector('input[name=cid]:checked').value;
+  S.coil.n=+$('in_cn').value;
+  S.coil.w=+$('in_cw').value;
+  // 仕様: コイル全幅（条数×条幅）は最大1600mm
+  S._capW=Math.max(60, Math.floor(1600/S.coil.n/10)*10);
+  S.coil.w=Math.min(S.coil.w, S._capW);
+  S.coil.orient=document.querySelector('input[name=orient]:checked').value;
+  S.coil.unit=document.querySelector('input[name=cunit]:checked').value;
+  S.plate.L=+$('in_pl').value; S.plate.W=+$('in_pw').value;
+  S.plate.t=+$('in_pt').value; S.plate.n=+$('in_pn').value;
+  S.plate.unit=document.querySelector('input[name=punit]:checked').value;
+  S.plate.k=Math.min(+$('in_pk').value, S.plate.n);
+  S.base.kind=document.querySelector('input[name=bkind]:checked').value;
+  if(S.type==='plate') S.base.kind='pallet';   // 仕様: 板はパレット
+  if(S.type==='coil' && S.coil.orient==='wall') S.base.kind='skid'; // 仕様: 横向きはスキッド受け
+  S.base.gap=+$('in_gap').value;
+  S.base.margin=+$('in_mg').value;
+  S.lid.mode=document.querySelector('input[name=lmode]:checked').value;
+  S.explode=+$('in_ex').value;
+}
+
+function syncPanel(){
+  const coil=S.type==='coil';
+  $('coilInputs').style.display=coil?'':'none';
+  $('plateInputs').style.display=coil?'none':'';
+  $('coilPack').style.display=coil?'':'none';
+  $('platePack').style.display=coil?'none':'';
+
+  $('v_od').textContent=`${fmt(S.coil.od)} mm`;
+  $('v_cn').textContent=`${S.coil.n} 条`;
+  const cwEl=$('in_cw');
+  cwEl.max=S._capW;
+  if(+cwEl.value!==S.coil.w) cwEl.value=S.coil.w;
+  $('v_cw').textContent=`${S.coil.w} mm`;
+  $('v_totw').textContent=`コイル全幅 = ${fmt(S.coil.n*S.coil.w)} mm（上限 1,600 / 条幅上限 ${fmt(S._capW)}）`;
+  $('v_pl').textContent=`${fmt(S.plate.L)} mm`;
+  $('v_pw').textContent=`${fmt(S.plate.W)} mm`;
+  $('v_pt').textContent=`${S.plate.t} mm`;
+  $('v_pn').textContent=`${S.plate.n} 枚`;
+  $('v_pk').textContent=`${Math.min(S.plate.k,S.plate.n)} 枚`;
+  $('v_gap').textContent=`${S.base.gap} mm`;
+  $('v_mg').textContent=`+${S.base.margin} mm`;
+  $('v_ex').textContent=S.explode?`${S.explode}%`:'なし';
+  $('rowPk').style.display=S.plate.unit==='split'?'':'none';
+  if(S.plate.unit==='split'){
+    const bn=Math.ceil(S.plate.n/Math.min(S.plate.k,S.plate.n));
+    $('v_bundles').textContent=`→ ${bn} 束になります`;
+  }
+  $('wrapHint').textContent = S.coil.orient==='wall'
+    ? '横向き: 紙は外周と内径部の円筒に沿って包みます（端面は開放・穴はふさぎません）。上蓋は使いません。'
+    : '上向き: 紙は円筒部（外周・内径部）と端面を包みます（穴はふさぎません）。';
+  $('cunitHint').textContent = S.coil.n===1 ? '1条のため一括と同じ仕上がりです' : '';
+
+  /* 制約の可視化（誤り防止） */
+  const isPlate=!coil;
+  const isWall=coil && S.coil.orient==='wall';
+  $('labSkid').classList.toggle('off', isPlate);
+  $('labSkid').querySelector('input').disabled=isPlate;
+  $('labPallet').classList.toggle('off', isWall);
+  $('labPallet').querySelector('input').disabled=isWall;
+  $('baseLock').style.display=(isPlate||isWall)?'':'none';
+  $('baseLock').textContent= isPlate
+    ? '板はパレットのみ選択できます（仕様）。'
+    : '横向きコイルはスキッド（斜めの受け材）で受けます（仕様）。バンドは受け材に掛けます。';
+  if(isPlate) document.querySelector('input[name=bkind][value=pallet]').checked=true;
+  if(isWall) document.querySelector('input[name=bkind][value=skid]').checked=true;
+
+  const pallet=S.base.kind==='pallet';
+  const lid = pallet && !(coil && S.coil.orient==='wall'); // 仕様: 横向きコイルは上蓋なし
+  $('rowGap').style.display=pallet?'':'none';
+  $('rowLid').style.display=lid?'':'none';
+  $('lidLock').style.display=lid?'none':'';
+  $('lidLock').textContent = 'スキッドのため上蓋はありません（仕様）。横向きコイルはコイル回しバンドで固定します。';
+  $('mgHint').textContent=`下台・上蓋の外形 = 製品寸法 + ${S.base.margin} mm（0〜30で選択）`;
+}
+
+function rebuild(keepCam){
+  readInputs();
+  syncPanel();
+  buildScene();
+  renderChips(); renderBOM(); renderLayers(); syncPresetButtons();
+  refit();
+  draw();
+}
+
+/* =========================================================================
+   設定プリセット（localStorage・この端末のみに保存）
+   製品・下台・上蓋・表示状態・視点をまとめて名前付きで保存し、後で一括復元する。
+   ========================================================================= */
+const PRESET_KEY='konpoPackPresets.v1';
+function loadPresets(){
+  try{ return JSON.parse(localStorage.getItem(PRESET_KEY)||'[]'); }
+  catch(e){ return []; }
+}
+function savePresets(list){
+  try{ localStorage.setItem(PRESET_KEY, JSON.stringify(list)); }
+  catch(e){ alert('プリセットの保存に失敗しました（ブラウザのストレージ容量制限の可能性があります）。'); }
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function presetSnapshot(){
+  return {
+    type:S.type,
+    coil:{...S.coil}, plate:{...S.plate}, base:{...S.base}, lid:{...S.lid},
+    explode:S.explode, show:{...S.show},
+    cam:{yaw:cam.yaw, pitch:cam.pitch, zoom:cam.zoom},
+  };
+}
+function setRadio(name,value){
+  const el=document.querySelector(`input[name="${name}"][value="${value}"]`);
+  if(el) el.checked=true;
+}
+function applyPreset(cfg){
+  setRadio('ptype', cfg.type);
+  $('in_od').value=cfg.coil.od; setRadio('cid', cfg.coil.id);
+  $('in_cn').value=cfg.coil.n; $('in_cw').value=cfg.coil.w;
+  setRadio('orient', cfg.coil.orient); setRadio('cunit', cfg.coil.unit);
+  $('in_pl').value=cfg.plate.L; $('in_pw').value=cfg.plate.W;
+  $('in_pt').value=cfg.plate.t; $('in_pn').value=cfg.plate.n;
+  setRadio('punit', cfg.plate.unit); $('in_pk').value=cfg.plate.k;
+  setRadio('bkind', cfg.base.kind);
+  $('in_gap').value=cfg.base.gap; $('in_mg').value=cfg.base.margin;
+  setRadio('lmode', cfg.lid.mode); $('in_ex').value=cfg.explode||0;
+  S.type=cfg.type;
+  if(cfg.show) Object.assign(S.show, cfg.show);
+  if(cfg.cam){ cam.yaw=cfg.cam.yaw; cam.pitch=cfg.cam.pitch; cam.zoom=cfg.cam.zoom; }
+  rebuild();
+}
+function renderPresetList(){
+  const list=loadPresets();
+  const el=$('presetList');
+  if(!list.length){ el.innerHTML='<div class="presetEmpty">保存されたプリセットはまだありません。</div>'; return; }
+  el.innerHTML=list.map((p,i)=>{
+    const d=new Date(p.savedAt);
+    const ds=`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return `<div class="presetRow">
+      <span class="pname" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</span>
+      <span class="pdate">${ds}</span>
+      <button class="papply" data-i="${i}">適用</button>
+      <button class="pdel" data-i="${i}">削除</button>
+    </div>`;
+  }).reverse().join(''); // 新しく保存したものを上に表示（インデックスは元の配列位置のまま）
+}
+$('presetSaveBtn').addEventListener('click', ()=>{
+  const nameEl=$('presetName');
+  const name=(nameEl.value||'').trim() || SUMMARY.slice(0,2).join(' / ');
+  const list=loadPresets();
+  list.push({name, savedAt:Date.now(), state:presetSnapshot()});
+  savePresets(list);
+  nameEl.value='';
+  renderPresetList();
+});
+$('presetList').addEventListener('click', (e)=>{
+  const btn=e.target.closest('button'); if(!btn) return;
+  const i=+btn.dataset.i;
+  const list=loadPresets();
+  if(!list[i]) return;
+  if(btn.classList.contains('papply')){
+    applyPreset(list[i].state);
+  }else if(btn.classList.contains('pdel')){
+    if(confirm(`プリセット「${list[i].name}」を削除しますか？`)){
+      list.splice(i,1);
+      savePresets(list);
+      renderPresetList();
+    }
+  }
+});
+
+/* 入力イベント */
+document.querySelectorAll('#panel input').forEach(el=>{
+  el.addEventListener('input',()=>{
+    if(el.name==='ptype'){ S.type=el.value; }
+    rebuild();
+  });
+});
+
+/* ---- カメラ操作 ---- */
+const VIEWS={ iso:[0.78,0.40], front:[0,0.10], side:[Math.PI/2,0.10], top:[0.78,1.35] };
+document.querySelectorAll('#views button[data-v]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    if(b.dataset.v==='fit'){ cam.zoom=1; }
+    else { const v=VIEWS[b.dataset.v]; cam.yaw=v[0]; cam.pitch=v[1]; }
+    draw();
+  });
+});
+
+/* ---- PNG画像として保存（現在の3D表示＋仕様サマリを1枚の画像に焼き込む） ---- */
+function wrapChipLine(ctx2, text, maxW){
+  const words=text.split('   ');
+  const lines=[]; let cur='';
+  for(const w of words){
+    const test=cur? cur+'   '+w : w;
+    if(ctx2.measureText(test).width>maxW && cur){ lines.push(cur); cur=w; }
+    else cur=test;
+  }
+  if(cur) lines.push(cur);
+  return lines;
+}
+function exportPNG(){
+  const out=document.createElement('canvas');
+  out.width=cv.width; out.height=cv.height;
+  const octx=out.getContext('2d');
+  const grad=octx.createLinearGradient(0,0,0,out.height);
+  grad.addColorStop(0,'#f8f1e5'); grad.addColorStop(1,'#efe2cd');
+  octx.fillStyle=grad; octx.fillRect(0,0,out.width,out.height);
+  octx.drawImage(cv,0,0);
+
+  // 現在の仕様をヘッダに焼き込み、画像単体でも内容が分かるようにする
+  const dpr=out.width/cv.clientWidth;
+  octx.save();
+  octx.scale(dpr,dpr);
+  octx.font='600 12.5px "Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif';
+  const pad=10, lineH=22, maxW=cv.clientWidth-24-pad*2;
+  const lines=wrapChipLine(octx, SUMMARY.join('   ・   '), maxW);
+  const barH=lines.length*lineH+10;
+  octx.fillStyle='rgba(255,253,248,.92)';
+  octx.fillRect(12,10,cv.clientWidth-24,barH);
+  octx.strokeStyle='#e5dccd'; octx.lineWidth=1;
+  octx.strokeRect(12.5,10.5,cv.clientWidth-25,barH-1);
+  octx.fillStyle='#3b3226';
+  octx.textBaseline='middle';
+  lines.forEach((ln,i)=>octx.fillText(ln, 12+pad, 10+lineH*(i+0.5)+6));
+  octx.restore();
+
+  out.toBlob(blob=>{
+    if(!blob) return;
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    const kind = S.type==='coil' ? `coil-${S.coil.orient}` : 'plate';
+    a.href=url; a.download=`konpo-${kind}-${ts}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  }, 'image/png');
+}
+$('pngSaveBtn').addEventListener('click', exportPNG);
+let drag=null; const ptrs=new Map();
+cv.addEventListener('pointerdown',e=>{
+  cv.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  drag=[e.clientX,e.clientY];
+  cv.classList.add('dragging');
+});
+cv.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId)) return;
+  if(ptrs.size===2){
+    const ids=[...ptrs.keys()];
+    const before=Math.hypot(ptrs.get(ids[0])[0]-ptrs.get(ids[1])[0], ptrs.get(ids[0])[1]-ptrs.get(ids[1])[1]);
+    ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+    const after=Math.hypot(ptrs.get(ids[0])[0]-ptrs.get(ids[1])[0], ptrs.get(ids[0])[1]-ptrs.get(ids[1])[1]);
+    if(before>0){ cam.zoom=Math.max(0.35,Math.min(4,cam.zoom*before/after)); draw(); }
+    return;
+  }
+  ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(!drag) return;
+  cam.yaw+=(e.clientX-drag[0])*0.008;
+  cam.pitch=Math.max(-0.1,Math.min(1.5,cam.pitch+(e.clientY-drag[1])*0.008));
+  drag=[e.clientX,e.clientY];
+  draw();
+});
+const endPtr=e=>{ptrs.delete(e.pointerId); drag=null; cv.classList.remove('dragging');};
+cv.addEventListener('pointerup',endPtr); cv.addEventListener('pointercancel',endPtr);
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  cam.zoom=Math.max(0.35,Math.min(4, cam.zoom*Math.pow(1.0016,e.deltaY)));
+  draw();
+},{passive:false});
+cv.addEventListener('dblclick',()=>{cam.yaw=0.78;cam.pitch=0.40;cam.zoom=1;draw();});
+
+new ResizeObserver(()=>{refit();draw();}).observe(cv);
+
+/* 初期化 */
+rebuild();
+renderPresetList();
+</script>
+</body>
+</html>
